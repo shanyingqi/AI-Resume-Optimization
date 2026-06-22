@@ -70,6 +70,7 @@ export default function OptimizeResultPanel({
   const [copied, setCopied] = useState("");
   const [tab, setTab] = useState<ResultTab>("analysis");
 
+  // 复制文本到剪贴板
   async function handleCopy(label: string, text: string) {
     await copyText(text);
     setCopied(label);

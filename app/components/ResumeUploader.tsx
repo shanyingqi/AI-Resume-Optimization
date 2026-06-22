@@ -11,6 +11,7 @@ interface ResumeUploaderProps {
   disabled?: boolean;
 }
 
+// 简历上传组件，支持 PDF、DOCX、TXT、MD 格式，最大 5MB
 export default function ResumeUploader({
   onParsed,
   disabled,
@@ -21,6 +22,7 @@ export default function ResumeUploader({
   const [error, setError] = useState("");
   const [lastFile, setLastFile] = useState("");
 
+  // 处理文件上传
   async function handleFile(file: File) {
     setError("");
     setLastFile("");
@@ -67,6 +69,7 @@ export default function ResumeUploader({
     }
   }
 
+  // 处理拖拽文件
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragging(false);
@@ -76,6 +79,7 @@ export default function ResumeUploader({
     if (file) handleFile(file);
   }
 
+  // 文件选择器接受格式
   const accept = ACCEPTED_RESUME_EXTENSIONS.join(",");
 
   return (

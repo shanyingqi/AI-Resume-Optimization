@@ -14,17 +14,20 @@ interface HistoryPanelProps {
   onRestore: (record: HistoryRecord) => void;
 }
 
+// 历史记录面板，显示最近优化记录，支持删除和恢复
 export default function HistoryPanel({
   records,
   activeId,
   onRecordsChange,
   onRestore,
 }: HistoryPanelProps) {
+  // 删除历史记录
   function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation();
     onRecordsChange(deleteHistoryRecord(id));
   }
 
+  // 清空全部历史记录
   function handleClear() {
     if (!records.length) return;
     if (confirm("确定清空全部历史记录？")) {
