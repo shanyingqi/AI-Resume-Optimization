@@ -30,12 +30,19 @@ export async function consumeOptimizeStream(
       const data = (await res.json()) as { error?: string };
       throw new Error(data.error ?? "请求失败");
     }
+    if (res.status === 429) {
+      throw new Error("请求过于频繁，请稍后再试");
+    }
     throw new Error(`请求失败 (${res.status})`);
   }
 
   const reader = res.body?.getReader();
   if (!reader) {
     throw new Error("无法读取响应流");
+  }
+
+  if (signal) {
+    signal.addEventListener("abort", () => void reader.cancel(), { once: true });
   }
 
   const decoder = new TextDecoder();
@@ -69,6 +76,11 @@ export async function consumeOptimizeStream(
   };
 
   while (true) {
+    if (signal?.aborted) {
+      await reader.cancel();
+      throw new DOMException("请求已取消", "AbortError");
+    }
+
     const { done, value } = await reader.read();
     if (done) break;
 

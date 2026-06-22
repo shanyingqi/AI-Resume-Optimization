@@ -53,6 +53,7 @@ export async function callOptimizeAIStream(
   prompt: string,
   mode: OptimizeMode = "general",
   onProgress?: (chars: number) => void,
+  signal?: AbortSignal,
 ): Promise<OptimizeResult> {
   const { apiKey, baseUrl } = getAIConfig();
 
@@ -63,6 +64,7 @@ export async function callOptimizeAIStream(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(buildChatBody(prompt, true)),
+    signal,
   });
 
   if (!response.ok) {
@@ -80,6 +82,11 @@ export async function callOptimizeAIStream(
   let fullContent = "";
 
   while (true) {
+    if (signal?.aborted) {
+      await reader.cancel();
+      throw new DOMException("请求已取消", "AbortError");
+    }
+
     const { done, value } = await reader.read();
     if (done) break;
 

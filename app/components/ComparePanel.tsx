@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import AppModal from "./AppModal";
 import DownloadButton from "./DownloadButton";
+import type { DiffCell } from "@/lib/resume/text-diff";
+import { diffResumeLines } from "@/lib/resume/text-diff";
 
 interface ComparePanelProps {
   original: string;
@@ -10,7 +12,31 @@ interface ComparePanelProps {
   onApplyOptimized?: (optimized: string) => void;
 }
 
-// 左右对照查看原文与 AI 优化后的完整简历，滚动已同步
+function cellClass(cell: DiffCell, side: "left" | "right"): string {
+  if (cell.type === "empty") {
+    return "min-h-[1.6em] bg-zinc-50/80 dark:bg-zinc-800/30";
+  }
+  if (cell.type === "delete") {
+    return "bg-red-100 text-red-800 line-through decoration-red-400 dark:bg-red-950/50 dark:text-red-300";
+  }
+  if (cell.type === "insert") {
+    return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300";
+  }
+  return side === "right"
+    ? "text-emerald-800 dark:text-emerald-300"
+    : "text-zinc-700 dark:text-zinc-300";
+}
+
+function DiffCellView({ cell, side }: { cell: DiffCell; side: "left" | "right" }) {
+  return (
+    <div
+      className={`break-words px-4 py-0.5 text-sm leading-relaxed whitespace-pre-wrap ${cellClass(cell, side)}`}
+    >
+      {cell.type === "empty" ? "\u00a0" : cell.text || "\u00a0"}
+    </div>
+  );
+}
+
 export default function ComparePanel({
   original,
   optimized,
@@ -22,7 +48,11 @@ export default function ComparePanel({
   const [applied, setApplied] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // 同步左右面板滚动
+  const rows = useMemo(
+    () => diffResumeLines(original, optimized),
+    [original, optimized],
+  );
+
   function syncScroll(source: "left" | "right") {
     if (syncing.current) return;
     const left = leftRef.current;
@@ -40,7 +70,6 @@ export default function ComparePanel({
     });
   }
 
-  // 确认应用优化版
   function handleConfirmApply() {
     onApplyOptimized?.(optimized);
     setConfirmOpen(false);
@@ -51,9 +80,21 @@ export default function ComparePanel({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          左右对照查看原文与 AI 优化后的完整简历，滚动已同步
-        </p>
+        <div className="space-y-1">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            左右对照查看差异，滚动已同步
+          </p>
+          <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded bg-red-100 dark:bg-red-950/50" />
+              删除
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded bg-emerald-100 dark:bg-emerald-950/50" />
+              新增
+            </span>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {onApplyOptimized && (
             <button
@@ -80,9 +121,11 @@ export default function ComparePanel({
           <div
             ref={leftRef}
             onScroll={() => syncScroll("left")}
-            className="flex-1 overflow-x-hidden overflow-y-auto p-4 text-sm leading-relaxed break-words whitespace-pre-wrap text-zinc-700 dark:text-zinc-300"
+            className="flex-1 overflow-x-hidden overflow-y-auto py-2"
           >
-            {original}
+            {rows.map((row, i) => (
+              <DiffCellView key={`l-${i}`} cell={row.left} side="left" />
+            ))}
           </div>
         </div>
 
@@ -93,9 +136,11 @@ export default function ComparePanel({
           <div
             ref={rightRef}
             onScroll={() => syncScroll("right")}
-            className="flex-1 overflow-x-hidden overflow-y-auto p-4 text-sm leading-relaxed break-words whitespace-pre-wrap text-emerald-800 dark:text-emerald-300"
+            className="flex-1 overflow-x-hidden overflow-y-auto py-2"
           >
-            {optimized}
+            {rows.map((row, i) => (
+              <DiffCellView key={`r-${i}`} cell={row.right} side="right" />
+            ))}
           </div>
         </div>
       </div>

@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import HistoryPanel from "./HistoryPanel";
 import OptimizeResultPanel from "./OptimizeResultPanel";
 import ResumeUploader from "./ResumeUploader";
-import { DRAFT_STORAGE_KEY } from "@/lib/resume/constants";
+import { DRAFT_STORAGE_KEY, MAX_JD_CHARS, MAX_RESUME_CHARS } from "@/lib/resume/constants";
 import { loadHistory, saveHistoryRecord } from "@/lib/resume/history";
 import {
   consumeOptimizeStream,
   INITIAL_LOADING_STATE,
   type OptimizeLoadingState,
 } from "@/lib/resume/optimize-stream";
+import { validateOptimizeInput } from "@/lib/resume/validate";
 import type { HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
 
 type InputTab = "upload" | "paste";
@@ -107,9 +108,24 @@ export default function ResumeOptimizer() {
     document.getElementById("resume")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
+  // 取消正在进行的分析
+  function handleCancel() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+    setLoadingState(INITIAL_LOADING_STATE);
+  }
+
   // 提交优化请求（SSE 流式）
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    const validationError = validateOptimizeInput(resume, jobDescription, mode);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -148,14 +164,19 @@ export default function ResumeOptimizer() {
   }
 
   const charCount = resume.length;
+  const jdCount = jobDescription.length;
+  const resumeOverLimit = charCount > MAX_RESUME_CHARS;
+  const jdOverLimit = mode === "targeted" && jdCount > MAX_JD_CHARS;
   const wordHint =
     charCount === 0
       ? ""
-      : charCount < 200
-        ? "内容偏短，建议补充更多经历细节"
-        : charCount > 8000
-          ? "内容较长，分析可能更慢"
-          : "长度适中";
+      : resumeOverLimit
+        ? `超出上限 ${MAX_RESUME_CHARS.toLocaleString()} 字`
+        : charCount < 200
+          ? "内容偏短，建议补充更多经历细节"
+          : charCount > 8000
+            ? "内容较长，分析可能更慢"
+            : "长度适中";
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6">
@@ -227,14 +248,21 @@ export default function ResumeOptimizer() {
               简历内容
             </label>
             <div className="flex items-center gap-3 text-xs text-zinc-500">
-              {charCount > 0 && <span>{charCount} 字</span>}
-              {wordHint && <span>{wordHint}</span>}
+              {charCount > 0 && (
+                <span className={resumeOverLimit ? "text-red-600" : ""}>
+                  {charCount.toLocaleString()} / {MAX_RESUME_CHARS.toLocaleString()} 字
+                </span>
+              )}
+              {wordHint && (
+                <span className={resumeOverLimit ? "text-red-600" : ""}>{wordHint}</span>
+              )}
             </div>
           </div>
           <textarea
             id="resume"
             value={resume}
             onChange={(e) => setResume(e.target.value)}
+            maxLength={MAX_RESUME_CHARS + 500}
             placeholder={
               inputTab === "upload"
                 ? "上传文件后内容将显示在这里，也可手动编辑..."
@@ -270,13 +298,23 @@ export default function ResumeOptimizer() {
 
           {mode === "targeted" && (
             <>
-              <label htmlFor="jd" className="text-sm font-medium">
-                目标岗位 JD
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="jd" className="text-sm font-medium">
+                  目标岗位 JD
+                </label>
+                {jdCount > 0 && (
+                  <span
+                    className={`text-xs ${jdOverLimit ? "text-red-600" : "text-zinc-500"}`}
+                  >
+                    {jdCount.toLocaleString()} / {MAX_JD_CHARS.toLocaleString()} 字
+                  </span>
+                )}
+              </div>
               <textarea
                 id="jd"
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
+                maxLength={MAX_JD_CHARS + 200}
                 placeholder="粘贴招聘岗位描述..."
                 rows={6}
                 required={mode === "targeted"}
@@ -286,13 +324,25 @@ export default function ResumeOptimizer() {
           )}
 
           <div className="flex gap-3">
-            <button
-              type="submit"
-              disabled={loading || !resume.trim()}
-              className="flex-1 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "分析中..." : "开始优化"}
-            </button>
+            {loading ? (
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="flex-1 rounded-xl border border-red-200 bg-red-50 px-6 py-3 text-sm font-medium text-red-600 transition hover:bg-red-100 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+              >
+                取消分析
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={
+                  !resume.trim() || resumeOverLimit || jdOverLimit
+                }
+                className="flex-1 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                开始优化
+              </button>
+            )}
             <button
               type="button"
               onClick={handleClear}
@@ -317,6 +367,7 @@ export default function ResumeOptimizer() {
           originalResume={resume}
           isTargeted={mode === "targeted"}
           onApplyOptimized={handleApplyOptimized}
+          onCancel={handleCancel}
         />
       </form>
 

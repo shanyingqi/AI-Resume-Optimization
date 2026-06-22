@@ -23,6 +23,7 @@ interface OptimizeResultPanelProps {
   originalResume: string;
   isTargeted: boolean;
   onApplyOptimized?: (optimized: string) => void;
+  onCancel?: () => void;
 }
 
 // 复制文本到剪贴板
@@ -72,6 +73,7 @@ export default function OptimizeResultPanel({
   originalResume,
   isTargeted,
   onApplyOptimized,
+  onCancel,
 }: OptimizeResultPanelProps) {
   const [copied, setCopied] = useState("");
   const [tab, setTab] = useState<ResultTab>("analysis");
@@ -84,7 +86,7 @@ export default function OptimizeResultPanel({
   }
 
   if (loading) {
-    return <OptimizeLoadingPanel state={loadingState} />;
+    return <OptimizeLoadingPanel state={loadingState} onCancel={onCancel} />;
   }
 
   if (!result) {

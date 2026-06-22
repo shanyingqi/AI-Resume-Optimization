@@ -7,9 +7,13 @@ import {
 
 interface OptimizeLoadingPanelProps {
   state: OptimizeLoadingState;
+  onCancel?: () => void;
 }
 
-export default function OptimizeLoadingPanel({ state }: OptimizeLoadingPanelProps) {
+export default function OptimizeLoadingPanel({
+  state,
+  onCancel,
+}: OptimizeLoadingPanelProps) {
   const progressPercent =
     state.step > 0 ? Math.round((state.step / state.total) * 100) : 0;
 
@@ -78,6 +82,16 @@ export default function OptimizeLoadingPanel({ state }: OptimizeLoadingPanelProp
             );
           })}
         </ul>
+
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          >
+            取消分析
+          </button>
+        )}
       </div>
     </div>
   );

@@ -1,12 +1,32 @@
 import { NextResponse } from "next/server";
-import { MAX_RESUME_FILE_SIZE } from "@/lib/resume/constants";
+import {
+  checkRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/api/rate-limit";
+import {
+  MAX_RESUME_FILE_SIZE,
+  PARSE_RATE_LIMIT,
+  RATE_LIMIT_WINDOW_MS,
+} from "@/lib/resume/constants";
 import { parseDocx, parsePdf } from "@/lib/resume/parse-server";
+import { validateResumeLength } from "@/lib/resume/validate";
 
 // PDF/DOCX 解析依赖 Node.js Buffer，需使用 nodejs 运行时
 export const runtime = "nodejs";
 
 /** 简历文件解析接口：接收 PDF / DOCX，返回提取的纯文本 */
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const rate = checkRateLimit(
+    `parse:${ip}`,
+    PARSE_RATE_LIMIT,
+    RATE_LIMIT_WINDOW_MS,
+  );
+  if (!rate.allowed) {
+    return rateLimitResponse(rate.retryAfterSec);
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");
@@ -44,6 +64,14 @@ export async function POST(request: Request) {
     if (!text.trim()) {
       return NextResponse.json(
         { error: "未能从文件中提取到文字，请尝试粘贴文本或更换文件" },
+        { status: 400 },
+      );
+    }
+
+    const lengthError = validateResumeLength(text);
+    if (lengthError) {
+      return NextResponse.json(
+        { error: `${lengthError}，请精简后重新上传` },
         { status: 400 },
       );
     }

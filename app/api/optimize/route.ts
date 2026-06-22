@@ -1,7 +1,17 @@
 import { callOptimizeAIStream } from "@/lib/ai/client";
 import type { OptimizeStreamEvent } from "@/lib/ai/stream-events";
 import { OPTIMIZE_STEP_TOTAL } from "@/lib/ai/stream-events";
+import {
+  checkRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/api/rate-limit";
 import { buildOptimizePrompt } from "@/lib/prompts/optimize-resume";
+import {
+  OPTIMIZE_RATE_LIMIT,
+  RATE_LIMIT_WINDOW_MS,
+} from "@/lib/resume/constants";
+import { validateOptimizeInput } from "@/lib/resume/validate";
 import type { OptimizeRequest } from "@/lib/types/resume";
 
 function sseEncode(event: OptimizeStreamEvent): Uint8Array {
@@ -10,6 +20,16 @@ function sseEncode(event: OptimizeStreamEvent): Uint8Array {
 
 /** 简历 AI 优化接口（SSE 流式）：分步反馈 + 流式生成结果 */
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const rate = checkRateLimit(
+    `optimize:${ip}`,
+    OPTIMIZE_RATE_LIMIT,
+    RATE_LIMIT_WINDOW_MS,
+  );
+  if (!rate.allowed) {
+    return rateLimitResponse(rate.retryAfterSec);
+  }
+
   let body: OptimizeRequest;
 
   try {
@@ -22,16 +42,9 @@ export async function POST(request: Request) {
   }
 
   const { resume, jobDescription, mode } = body;
-
-  if (!resume?.trim()) {
-    return new Response(JSON.stringify({ error: "请提供简历内容" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  if (mode === "targeted" && !jobDescription?.trim()) {
-    return new Response(JSON.stringify({ error: "定向优化模式下请提供岗位 JD" }), {
+  const validationError = validateOptimizeInput(resume, jobDescription, mode);
+  if (validationError) {
+    return new Response(JSON.stringify({ error: validationError }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
@@ -40,6 +53,7 @@ export async function POST(request: Request) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: OptimizeStreamEvent) => {
+        if (request.signal.aborted) return;
         controller.enqueue(sseEncode(event));
       };
 
@@ -50,6 +64,8 @@ export async function POST(request: Request) {
           total: OPTIMIZE_STEP_TOTAL,
           message: "正在校验简历内容...",
         });
+
+        if (request.signal.aborted) return;
 
         const trimmedResume = resume.trim();
         const trimmedJd = jobDescription?.trim();
@@ -73,9 +89,14 @@ export async function POST(request: Request) {
           message: "AI 正在分析简历，请稍候...",
         });
 
-        const result = await callOptimizeAIStream(prompt, mode, (chars) => {
-          send({ type: "progress", chars });
-        });
+        const result = await callOptimizeAIStream(
+          prompt,
+          mode,
+          (chars) => send({ type: "progress", chars }),
+          request.signal,
+        );
+
+        if (request.signal.aborted) return;
 
         send({
           type: "step",
@@ -86,6 +107,9 @@ export async function POST(request: Request) {
 
         send({ type: "result", data: result });
       } catch (error) {
+        if (request.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+          return;
+        }
         console.error("[optimize]", error);
         send({
           type: "error",
@@ -95,6 +119,9 @@ export async function POST(request: Request) {
       } finally {
         controller.close();
       }
+    },
+    cancel() {
+      // 客户端断开连接时 request.signal 会 abort，AI 请求随之取消
     },
   });
 
