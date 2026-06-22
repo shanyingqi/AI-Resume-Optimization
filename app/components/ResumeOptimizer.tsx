@@ -6,10 +6,6 @@ import OptimizeResultPanel from "./OptimizeResultPanel";
 import ResumeUploader from "./ResumeUploader";
 import { DRAFT_STORAGE_KEY } from "@/lib/resume/constants";
 import { loadHistory, saveHistoryRecord } from "@/lib/resume/history";
-import {
-  SAMPLE_JOB_DESCRIPTION,
-  SAMPLE_RESUME,
-} from "@/lib/resume/samples";
 import type { HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
 
 type InputTab = "upload" | "paste";
@@ -62,15 +58,7 @@ export default function ResumeOptimizer() {
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
   }, [resume, jobDescription, mode, inputTab]);
 
-  function handleFillSample() {
-    setResume(SAMPLE_RESUME);
-    setJobDescription(SAMPLE_JOB_DESCRIPTION);
-    setMode("targeted");
-    setResult(null);
-    setError("");
-    setActiveHistoryId(undefined);
-  }
-
+  // 清空所有输入内容
   function handleClear() {
     setResume("");
     setJobDescription("");
@@ -81,6 +69,7 @@ export default function ResumeOptimizer() {
     setDraftRestored(false);
   }
 
+  // 恢复历史记录
   function handleRestoreHistory(record: HistoryRecord) {
     setResume(record.resume);
     setJobDescription(record.jobDescription ?? "");
@@ -91,6 +80,7 @@ export default function ResumeOptimizer() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // 提交优化请求
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -202,13 +192,6 @@ export default function ResumeOptimizer() {
               简历内容
             </label>
             <div className="flex items-center gap-3 text-xs text-zinc-500">
-              <button
-                type="button"
-                onClick={handleFillSample}
-                className="text-emerald-600 hover:underline dark:text-emerald-400"
-              >
-                填入示例
-              </button>
               {charCount > 0 && <span>{charCount} 字</span>}
               {wordHint && <span>{wordHint}</span>}
             </div>

@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import ComparePanel from "./ComparePanel";
-import {
-  downloadTextFile,
-  formatOptimizeReport,
-} from "@/lib/resume/export-report";
+import DownloadButton from "./DownloadButton";
+import { formatOptimizeReport } from "@/lib/resume/export-report";
 import type { OptimizeResult } from "@/lib/types/resume";
 
 const severityColor = {
@@ -23,10 +21,12 @@ interface OptimizeResultPanelProps {
   isTargeted: boolean;
 }
 
+// 复制文本到剪贴板
 async function copyText(text: string) {
   await navigator.clipboard.writeText(text);
 }
 
+// JD 匹配度条形图
 function MatchRateBar({ rate, summary }: { rate: number; summary?: string }) {
   const color =
     rate >= 80
@@ -60,6 +60,7 @@ function MatchRateBar({ rate, summary }: { rate: number; summary?: string }) {
   );
 }
 
+// 优化结果面板
 export default function OptimizeResultPanel({
   result,
   loading,
@@ -154,18 +155,11 @@ export default function OptimizeResultPanel({
             </div>
 
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  downloadTextFile(
-                    formatOptimizeReport(result),
-                    `简历优化报告-${Date.now()}.txt`,
-                  )
-                }
-                className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-              >
-                下载报告
-              </button>
+              <DownloadButton
+                content={formatOptimizeReport(result)}
+                filenamePrefix="简历优化报告"
+                label="下载报告"
+              />
               <button
                 type="button"
                 onClick={() =>

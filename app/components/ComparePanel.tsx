@@ -1,13 +1,14 @@
 "use client";
 
 import { useRef } from "react";
-import { downloadTextFile } from "@/lib/resume/export-report";
+import DownloadButton from "./DownloadButton";
 
 interface ComparePanelProps {
   original: string;
   optimized: string;
 }
 
+// 左右对照查看原文与 AI 优化后的完整简历，滚动已同步
 export default function ComparePanel({ original, optimized }: ComparePanelProps) {
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -37,15 +38,11 @@ export default function ComparePanel({ original, optimized }: ComparePanelProps)
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           左右对照查看原文与 AI 优化后的完整简历，滚动已同步
         </p>
-        <button
-          type="button"
-          onClick={() =>
-            downloadTextFile(optimized, `优化版简历-${Date.now()}.txt`)
-          }
-          className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-        >
-          下载优化版
-        </button>
+        <DownloadButton
+          content={optimized}
+          filenamePrefix="优化版简历"
+          label="下载优化版"
+        />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
