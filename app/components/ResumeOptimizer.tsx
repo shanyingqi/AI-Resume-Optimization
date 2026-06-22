@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import type { OptimizeMode, OptimizeResult } from "@/lib/types/resume";
+import { useEffect, useState } from "react";
+import HistoryPanel from "./HistoryPanel";
+import OptimizeResultPanel from "./OptimizeResultPanel";
+import ResumeUploader from "./ResumeUploader";
+import { DRAFT_STORAGE_KEY } from "@/lib/resume/constants";
+import { loadHistory, saveHistoryRecord } from "@/lib/resume/history";
+import type { HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
 
 const SAMPLE_RESUME = `张三 | 前端开发工程师 | zhangsan@email.com
 
@@ -18,25 +23,77 @@ const SAMPLE_RESUME = `张三 | 前端开发工程师 | zhangsan@email.com
 
 技能：JavaScript, React, Vue, CSS`;
 
-const severityColor = {
-  high: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  medium: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  low: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-} as const;
+type InputTab = "upload" | "paste";
+
+interface DraftData {
+  resume: string;
+  jobDescription: string;
+  mode: OptimizeMode;
+  inputTab: InputTab;
+}
 
 export default function ResumeOptimizer() {
   const [resume, setResume] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [mode, setMode] = useState<OptimizeMode>("general");
+  const [inputTab, setInputTab] = useState<InputTab>("upload");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<(OptimizeResult & { mock?: boolean }) | null>(null);
+  const [result, setResult] = useState<
+    (OptimizeResult & { mock?: boolean }) | null
+  >(null);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
+  const [activeHistoryId, setActiveHistoryId] = useState<string>();
+
+  useEffect(() => {
+    setHistoryRecords(loadHistory());
+
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as DraftData;
+      if (draft.resume) setResume(draft.resume);
+      if (draft.jobDescription) setJobDescription(draft.jobDescription);
+      if (draft.mode) setMode(draft.mode);
+      if (draft.inputTab) setInputTab(draft.inputTab);
+      setDraftRestored(true);
+    } catch {
+      // ignore invalid draft
+    }
+  }, []);
+
+  useEffect(() => {
+    const draft: DraftData = { resume, jobDescription, mode, inputTab };
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  }, [resume, jobDescription, mode, inputTab]);
+
+  function handleClear() {
+    setResume("");
+    setJobDescription("");
+    setResult(null);
+    setError("");
+    setActiveHistoryId(undefined);
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+    setDraftRestored(false);
+  }
+
+  function handleRestoreHistory(record: HistoryRecord) {
+    setResume(record.resume);
+    setJobDescription(record.jobDescription ?? "");
+    setMode(record.mode);
+    setResult(record.result);
+    setActiveHistoryId(record.id);
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
     setResult(null);
+    setActiveHistoryId(undefined);
 
     try {
       const res = await fetch("/api/optimize", {
@@ -52,6 +109,15 @@ export default function ResumeOptimizer() {
       }
 
       setResult(data);
+
+      const record = saveHistoryRecord({
+        mode,
+        resume,
+        jobDescription: jobDescription || undefined,
+        result: data,
+      });
+      setHistoryRecords(loadHistory());
+      setActiveHistoryId(record.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "未知错误");
     } finally {
@@ -59,45 +125,109 @@ export default function ResumeOptimizer() {
     }
   }
 
+  const charCount = resume.length;
+  const wordHint =
+    charCount === 0
+      ? ""
+      : charCount < 200
+        ? "内容偏短，建议补充更多经历细节"
+        : charCount > 8000
+          ? "内容较长，分析可能更慢"
+          : "长度适中";
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6">
       <header className="space-y-2">
         <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-          AI 简历优化
+          小单 AI 简历优化
         </p>
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
           让简历更专业、更匹配岗位
         </h1>
         <p className="max-w-2xl text-zinc-600 dark:text-zinc-400">
-          粘贴简历原文，可选填目标岗位 JD，AI 将给出评分、问题诊断、改写示例与关键词建议。
+          上传或粘贴简历，AI 给出评分、JD 匹配度、问题诊断，并支持原文与优化版左右对比。
         </p>
       </header>
 
+      {draftRestored && (
+        <p className="rounded-lg bg-blue-50 px-4 py-2 text-xs text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+          已恢复上次未完成的草稿
+        </p>
+      )}
+
       <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
+          <div className="flex rounded-lg border border-zinc-200 p-1 dark:border-zinc-700">
+            <button
+              type="button"
+              onClick={() => setInputTab("upload")}
+              className={`flex-1 rounded-md px-3 py-2 text-sm transition ${
+                inputTab === "upload"
+                  ? "bg-emerald-600 text-white"
+                  : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
+            >
+              上传简历
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputTab("paste")}
+              className={`flex-1 rounded-md px-3 py-2 text-sm transition ${
+                inputTab === "paste"
+                  ? "bg-emerald-600 text-white"
+                  : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
+            >
+              粘贴文本
+            </button>
+          </div>
+
+          {inputTab === "upload" ? (
+            <ResumeUploader
+              disabled={loading}
+              onParsed={(text) => {
+                setResume(text);
+                setResult(null);
+                setError("");
+                setActiveHistoryId(undefined);
+              }}
+            />
+          ) : (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setResume(SAMPLE_RESUME)}
+                className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
+              >
+                填入示例
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <label htmlFor="resume" className="text-sm font-medium">
               简历内容
             </label>
-            <button
-              type="button"
-              onClick={() => setResume(SAMPLE_RESUME)}
-              className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
-            >
-              填入示例
-            </button>
+            <div className="flex items-center gap-3 text-xs text-zinc-500">
+              {charCount > 0 && <span>{charCount} 字</span>}
+              {wordHint && <span>{wordHint}</span>}
+            </div>
           </div>
           <textarea
             id="resume"
             value={resume}
             onChange={(e) => setResume(e.target.value)}
-            placeholder="粘贴你的简历文本..."
-            rows={16}
+            placeholder={
+              inputTab === "upload"
+                ? "上传文件后内容将显示在这里，也可手动编辑..."
+                : "粘贴你的简历文本..."
+            }
+            rows={14}
             required
             className="w-full resize-y rounded-xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900"
           />
 
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <input
                 type="radio"
@@ -130,20 +260,30 @@ export default function ResumeOptimizer() {
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
                 placeholder="粘贴招聘岗位描述..."
-                rows={8}
+                rows={6}
                 required={mode === "targeted"}
                 className="w-full resize-y rounded-xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed outline-none ring-emerald-500 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900"
               />
             </>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl bg-emerald-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? "分析中..." : "开始优化"}
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="submit"
+              disabled={loading || !resume.trim()}
+              className="flex-1 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "分析中..." : "开始优化"}
+            </button>
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={loading}
+              className="rounded-xl border border-zinc-200 px-4 py-3 text-sm text-zinc-600 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              清空
+            </button>
+          </div>
 
           {error && (
             <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-950 dark:text-red-300">
@@ -152,109 +292,20 @@ export default function ResumeOptimizer() {
           )}
         </div>
 
-        <div className="space-y-4">
-          {!result && !loading && (
-            <div className="flex h-full min-h-[320px] items-center justify-center rounded-xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
-              优化结果将显示在这里，包括评分、问题清单、改写示例与关键词建议
-            </div>
-          )}
-
-          {loading && (
-            <div className="flex h-full min-h-[320px] items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex flex-col items-center gap-3 text-sm text-zinc-500">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
-                AI 正在分析简历...
-              </div>
-            </div>
-          )}
-
-          {result && (
-            <div className="space-y-5 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-              {result.mock && (
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                  当前为演示模式（未配置 OPENAI_API_KEY），结果为示例数据
-                </p>
-              )}
-
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-2xl font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                  {result.score}
-                </div>
-                <div>
-                  <p className="font-medium">综合评分</p>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">{result.summary}</p>
-                </div>
-              </div>
-
-              <section>
-                <h2 className="mb-2 text-sm font-semibold">问题诊断</h2>
-                <ul className="space-y-2">
-                  {result.issues.map((issue, i) => (
-                    <li
-                      key={i}
-                      className="rounded-lg border border-zinc-100 p-3 text-sm dark:border-zinc-800"
-                    >
-                      <div className="mb-1 flex items-center gap-2">
-                        <span className="font-medium">{issue.section}</span>
-                        <span
-                          className={`rounded px-1.5 py-0.5 text-xs ${severityColor[issue.severity]}`}
-                        >
-                          {issue.severity}
-                        </span>
-                      </div>
-                      <p className="text-zinc-600 dark:text-zinc-400">{issue.problem}</p>
-                      <p className="mt-1 text-emerald-700 dark:text-emerald-400">
-                        → {issue.suggestion}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-
-              <section>
-                <h2 className="mb-2 text-sm font-semibold">改写示例</h2>
-                <ul className="space-y-3">
-                  {result.optimizedSections.map((section, i) => (
-                    <li
-                      key={i}
-                      className="rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800/50"
-                    >
-                      <p className="mb-1 font-medium">{section.title}</p>
-                      <p className="text-zinc-500 line-through">{section.original}</p>
-                      <p className="mt-1 text-emerald-700 dark:text-emerald-400">
-                        {section.optimized}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-
-              <section>
-                <h2 className="mb-2 text-sm font-semibold">建议关键词</h2>
-                <div className="flex flex-wrap gap-2">
-                  {result.keywords.map((kw) => (
-                    <span
-                      key={kw}
-                      className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                    >
-                      {kw}
-                    </span>
-                  ))}
-                </div>
-              </section>
-
-              <section>
-                <h2 className="mb-2 text-sm font-semibold">求职建议</h2>
-                <ul className="list-inside list-disc space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  {result.tips.map((tip, i) => (
-                    <li key={i}>{tip}</li>
-                  ))}
-                </ul>
-              </section>
-            </div>
-          )}
-        </div>
+        <OptimizeResultPanel
+          result={result}
+          loading={loading}
+          originalResume={resume}
+          isTargeted={mode === "targeted"}
+        />
       </form>
+
+      <HistoryPanel
+        records={historyRecords}
+        activeId={activeHistoryId}
+        onRecordsChange={setHistoryRecords}
+        onRestore={handleRestoreHistory}
+      />
     </div>
   );
 }

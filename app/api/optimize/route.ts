@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     const prompt = buildOptimizePrompt(resume.trim(), jobDescription?.trim(), mode);
-    const result = await callOptimizeAI(prompt);
+    const result = await callOptimizeAI(prompt, mode);
 
     return NextResponse.json({
       ...result,

@@ -1,15 +1,18 @@
-import type { OptimizeResult } from "@/lib/types/resume";
+import type { OptimizeMode, OptimizeResult } from "@/lib/types/resume";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
 
-export async function callOptimizeAI(prompt: string): Promise<OptimizeResult> {
+export async function callOptimizeAI(
+  prompt: string,
+  mode: OptimizeMode = "general",
+): Promise<OptimizeResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   const baseUrl = process.env.OPENAI_BASE_URL ?? DEFAULT_BASE_URL;
   const model = process.env.OPENAI_MODEL ?? DEFAULT_MODEL;
 
   if (!apiKey) {
-    return getMockResult();
+    return getMockResult(mode);
   }
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -45,7 +48,29 @@ export async function callOptimizeAI(prompt: string): Promise<OptimizeResult> {
     throw new Error("AI 返回内容为空");
   }
 
-  return JSON.parse(content) as OptimizeResult;
+  return normalizeResult(JSON.parse(content) as Partial<OptimizeResult>, mode);
+}
+
+function normalizeResult(
+  raw: Partial<OptimizeResult>,
+  mode: OptimizeMode,
+): OptimizeResult {
+  const optimizedSections = raw.optimizedSections ?? [];
+  const fallbackResume = optimizedSections
+    .map((s) => `【${s.title}】\n${s.optimized}`)
+    .join("\n\n");
+
+  return {
+    score: raw.score ?? 0,
+    summary: raw.summary ?? "",
+    jdMatchRate: mode === "targeted" ? raw.jdMatchRate : undefined,
+    jdMatchSummary: mode === "targeted" ? raw.jdMatchSummary : undefined,
+    fullOptimizedResume: raw.fullOptimizedResume?.trim() || fallbackResume,
+    issues: raw.issues ?? [],
+    optimizedSections,
+    keywords: raw.keywords ?? [],
+    tips: raw.tips ?? [],
+  };
 }
 
 function parseAIError(status: number, errorText: string): string {
@@ -71,11 +96,24 @@ function parseAIError(status: number, errorText: string): string {
   return `AI 请求失败 (${status})，请稍后重试`;
 }
 
-function getMockResult(): OptimizeResult {
-  return {
+function getMockResult(mode: OptimizeMode): OptimizeResult {
+  const base: OptimizeResult = {
     score: 72,
     summary:
       "简历结构基本完整，但成果量化不足、关键词密度偏低，建议按 STAR 法则重写核心经历。",
+    fullOptimizedResume: `张三 | 前端开发工程师 | zhangsan@email.com
+
+工作经历
+2022.06 - 至今  XX科技  前端工程师
+- 主导公司后台管理系统架构设计与开发（React + TypeScript），交付 12+ 业务模块，支撑内部 200+ 日活用户
+- 建立 Code Review 机制与前端规范，团队缺陷率下降 30%
+- 定期组织技术分享，推动组件库沉淀，复用率提升 40%
+
+项目经历
+电商管理后台
+- 独立负责订单与商品模块，基于 Ant Design 搭建高可用管理界面，订单处理效率提升 25%
+
+技能：JavaScript、React、TypeScript、Vue、CSS、性能优化`,
     issues: [
       {
         section: "工作经历",
@@ -99,16 +137,16 @@ function getMockResult(): OptimizeResult {
     ],
     optimizedSections: [
       {
-        title: "工作经历示例",
-        original: "负责公司官网开发与维护",
+        title: "工作经历",
+        original: "负责公司后台管理系统开发",
         optimized:
-          "主导公司官网重构（Next.js + TypeScript），将首屏加载时间从 3.2s 降至 1.1s（-66%），SEO 自然流量季度增长 40%",
+          "主导公司后台管理系统架构设计与开发（React + TypeScript），交付 12+ 业务模块，支撑内部 200+ 日活用户",
       },
       {
-        title: "项目经历示例",
+        title: "项目经历",
         original: "参与电商后台管理系统开发",
         optimized:
-          "作为核心开发负责订单与库存模块，设计 RESTful API 并完成 Redis 缓存方案，支撑双 11 期间峰值 QPS 8000+，接口 P99 延迟 < 120ms",
+          "独立负责订单与商品模块，基于 Ant Design 搭建管理界面，订单处理效率提升 25%",
       },
     ],
     keywords: ["React", "TypeScript", "性能优化", "微服务", "敏捷开发"],
@@ -119,4 +157,15 @@ function getMockResult(): OptimizeResult {
       "附 GitHub / 作品集链接可显著提升技术岗通过率",
     ],
   };
+
+  if (mode === "targeted") {
+    return {
+      ...base,
+      jdMatchRate: 68,
+      jdMatchSummary:
+        "React/TypeScript 技能匹配良好，但缺少 JD 要求的 Node.js 后端经验与大型项目规模描述，建议补充相关关键词。",
+    };
+  }
+
+  return base;
 }
