@@ -44,7 +44,7 @@ OPENAI_BASE_URL=https://api.deepseek.com/v1
 OPENAI_MODEL=deepseek-chat
 ```
 
-未配置 `OPENAI_API_KEY` 时，优化功能将无法使用。页面提供「填入示例」可快速体验输入流程。
+未配置 `OPENAI_API_KEY` 时，优化功能将无法使用。
 
 ### 3. 启动开发服务器
 
@@ -84,36 +84,3 @@ lib/
     samples.ts             # 填入示例用的演示数据
   types/resume.ts
 ```
-
-## API 说明
-
-### `POST /api/optimize`
-
-请求体：
-
-```json
-{
-  "resume": "简历文本",
-  "jobDescription": "岗位 JD（定向模式必填）",
-  "mode": "general | targeted"
-}
-```
-
-### `POST /api/parse-resume`
-
-`multipart/form-data`，字段名 `file`，支持 PDF、DOCX。
-
-## 注意事项
-
-- 扫描版 PDF（图片型）无法提取文字，请 OCR 后粘贴或上传文本文件
-- 旧版 `.doc` 格式暂不支持，请另存为 `.docx`
-- 历史记录与草稿保存在浏览器 `localStorage`，清除站点数据会丢失
-- 请勿将 `.env.local` 或 API Key 提交到 Git 仓库
-
-## 部署
-
-可部署至 [Vercel](https://vercel.com) 或其他支持 Next.js 的平台。在平台环境变量中配置 `OPENAI_API_KEY` 等即可。
-
-## License
-
-Private
