@@ -13,6 +13,7 @@ export default function ComparePanel({ original, optimized }: ComparePanelProps)
   const rightRef = useRef<HTMLDivElement>(null);
   const syncing = useRef(false);
 
+  /** 左右面板滚动联动，便于逐段对比 */
   function syncScroll(source: "left" | "right") {
     if (syncing.current) return;
     const left = leftRef.current;

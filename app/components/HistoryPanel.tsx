@@ -4,7 +4,6 @@ import {
   clearHistory,
   deleteHistoryRecord,
   formatHistoryTime,
-  loadHistory,
 } from "@/lib/resume/history";
 import type { HistoryRecord } from "@/lib/types/resume";
 

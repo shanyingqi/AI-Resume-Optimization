@@ -6,25 +6,15 @@ import OptimizeResultPanel from "./OptimizeResultPanel";
 import ResumeUploader from "./ResumeUploader";
 import { DRAFT_STORAGE_KEY } from "@/lib/resume/constants";
 import { loadHistory, saveHistoryRecord } from "@/lib/resume/history";
+import {
+  SAMPLE_JOB_DESCRIPTION,
+  SAMPLE_RESUME,
+} from "@/lib/resume/samples";
 import type { HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
-
-const SAMPLE_RESUME = `张三 | 前端开发工程师 | zhangsan@email.com
-
-工作经历
-2022.06 - 至今  XX科技  前端工程师
-- 负责公司后台管理系统开发
-- 使用 React 和 TypeScript 完成多个业务模块
-- 参与代码评审和技术分享
-
-项目经历
-电商管理后台
-- 参与订单、商品模块开发
-- 使用 Ant Design 搭建 UI
-
-技能：JavaScript, React, Vue, CSS`;
 
 type InputTab = "upload" | "paste";
 
+/** 自动保存到 localStorage 的草稿结构 */
 interface DraftData {
   resume: string;
   jobDescription: string;
@@ -32,6 +22,9 @@ interface DraftData {
   inputTab: InputTab;
 }
 
+/**
+ * 简历优化主页面：输入简历 → 调用 API → 展示分析结果，并管理草稿与历史。
+ */
 export default function ResumeOptimizer() {
   const [resume, setResume] = useState("");
   const [jobDescription, setJobDescription] = useState("");
@@ -39,14 +32,14 @@ export default function ResumeOptimizer() {
   const [inputTab, setInputTab] = useState<InputTab>("upload");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<
-    (OptimizeResult & { mock?: boolean }) | null
-  >(null);
+  const [result, setResult] = useState<OptimizeResult | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string>();
 
+  // 初始化：加载历史记录，并尝试恢复未提交的草稿
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHistoryRecords(loadHistory());
 
     try {
@@ -59,14 +52,24 @@ export default function ResumeOptimizer() {
       if (draft.inputTab) setInputTab(draft.inputTab);
       setDraftRestored(true);
     } catch {
-      // ignore invalid draft
+      // 草稿数据损坏时忽略
     }
   }, []);
 
+  // 编辑内容变化时自动保存草稿
   useEffect(() => {
     const draft: DraftData = { resume, jobDescription, mode, inputTab };
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
   }, [resume, jobDescription, mode, inputTab]);
+
+  function handleFillSample() {
+    setResume(SAMPLE_RESUME);
+    setJobDescription(SAMPLE_JOB_DESCRIPTION);
+    setMode("targeted");
+    setResult(null);
+    setError("");
+    setActiveHistoryId(undefined);
+  }
 
   function handleClear() {
     setResume("");
@@ -182,7 +185,7 @@ export default function ResumeOptimizer() {
             </button>
           </div>
 
-          {inputTab === "upload" ? (
+          {inputTab === "upload" && (
             <ResumeUploader
               disabled={loading}
               onParsed={(text) => {
@@ -192,16 +195,6 @@ export default function ResumeOptimizer() {
                 setActiveHistoryId(undefined);
               }}
             />
-          ) : (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setResume(SAMPLE_RESUME)}
-                className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
-              >
-                填入示例
-              </button>
-            </div>
           )}
 
           <div className="flex items-center justify-between">
@@ -209,6 +202,13 @@ export default function ResumeOptimizer() {
               简历内容
             </label>
             <div className="flex items-center gap-3 text-xs text-zinc-500">
+              <button
+                type="button"
+                onClick={handleFillSample}
+                className="text-emerald-600 hover:underline dark:text-emerald-400"
+              >
+                填入示例
+              </button>
               {charCount > 0 && <span>{charCount} 字</span>}
               {wordHint && <span>{wordHint}</span>}
             </div>

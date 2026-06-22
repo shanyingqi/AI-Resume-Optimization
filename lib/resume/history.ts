@@ -6,6 +6,7 @@ function preview(text: string, max = 80): string {
   return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max)}…`;
 }
 
+/** 从 localStorage 读取历史记录列表 */
 export function loadHistory(): HistoryRecord[] {
   if (typeof window === "undefined") return [];
   try {
@@ -18,6 +19,7 @@ export function loadHistory(): HistoryRecord[] {
   }
 }
 
+/** 保存一条优化记录，超出上限时丢弃最旧的记录 */
 export function saveHistoryRecord(input: {
   mode: OptimizeMode;
   resume: string;
@@ -56,6 +58,7 @@ export function clearHistory(): void {
   localStorage.removeItem(HISTORY_STORAGE_KEY);
 }
 
+/** 格式化为「今天 14:30」或「6/22 14:30」 */
 export function formatHistoryTime(iso: string): string {
   const date = new Date(iso);
   const now = new Date();

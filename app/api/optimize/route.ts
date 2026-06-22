@@ -3,6 +3,7 @@ import { callOptimizeAI } from "@/lib/ai/client";
 import { buildOptimizePrompt } from "@/lib/prompts/optimize-resume";
 import type { OptimizeRequest } from "@/lib/types/resume";
 
+/** 简历 AI 优化接口：校验输入 → 构建 Prompt → 调用大模型 */
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as OptimizeRequest;
@@ -25,10 +26,7 @@ export async function POST(request: Request) {
     const prompt = buildOptimizePrompt(resume.trim(), jobDescription?.trim(), mode);
     const result = await callOptimizeAI(prompt, mode);
 
-    return NextResponse.json({
-      ...result,
-      mock: !process.env.OPENAI_API_KEY,
-    });
+    return NextResponse.json(result);
   } catch (error) {
     console.error("[optimize]", error);
     return NextResponse.json(

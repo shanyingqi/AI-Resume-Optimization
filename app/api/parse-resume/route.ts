@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { MAX_RESUME_FILE_SIZE } from "@/lib/resume/constants";
 import { parseDocx, parsePdf } from "@/lib/resume/parse-server";
 
+// PDF/DOCX 解析依赖 Node.js Buffer，需使用 nodejs 运行时
 export const runtime = "nodejs";
 
+/** 简历文件解析接口：接收 PDF / DOCX，返回提取的纯文本 */
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();

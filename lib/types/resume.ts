@@ -1,3 +1,4 @@
+/** 优化模式：通用优化 或 结合 JD 的定向优化 */
 export type OptimizeMode = "general" | "targeted";
 
 export interface OptimizeRequest {
@@ -19,6 +20,7 @@ export interface OptimizedSection {
   optimized: string;
 }
 
+/** AI 优化分析的完整返回结构 */
 export interface OptimizeResult {
   score: number;
   summary: string;
@@ -34,6 +36,7 @@ export interface OptimizeResult {
   tips: string[];
 }
 
+/** 保存在 localStorage 中的历史记录条目 */
 export interface HistoryRecord {
   id: string;
   createdAt: string;

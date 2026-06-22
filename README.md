@@ -44,7 +44,7 @@ OPENAI_BASE_URL=https://api.deepseek.com/v1
 OPENAI_MODEL=deepseek-chat
 ```
 
-未配置 `OPENAI_API_KEY` 时，应用将以**演示模式**运行，返回示例数据。
+未配置 `OPENAI_API_KEY` 时，优化功能将无法使用。页面提供「填入示例」可快速体验输入流程。
 
 ### 3. 启动开发服务器
 
@@ -81,6 +81,7 @@ lib/
     parse-server.ts        # 服务端文档解析
     history.ts             # 历史记录
     export-report.ts       # 报告导出
+    samples.ts             # 填入示例用的演示数据
   types/resume.ts
 ```
 

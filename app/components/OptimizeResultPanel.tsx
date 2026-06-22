@@ -17,7 +17,7 @@ const severityColor = {
 type ResultTab = "analysis" | "compare";
 
 interface OptimizeResultPanelProps {
-  result: (OptimizeResult & { mock?: boolean }) | null;
+  result: OptimizeResult | null;
   loading: boolean;
   originalResume: string;
   isTargeted: boolean;
@@ -100,12 +100,6 @@ export default function OptimizeResultPanel({
 
   return (
     <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-      {result.mock && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-          当前为演示模式（未配置 OPENAI_API_KEY），结果为示例数据
-        </p>
-      )}
-
       <div className="flex rounded-lg border border-zinc-200 p-1 dark:border-zinc-700">
         <button
           type="button"

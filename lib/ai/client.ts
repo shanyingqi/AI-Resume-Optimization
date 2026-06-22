@@ -1,8 +1,13 @@
 import type { OptimizeMode, OptimizeResult } from "@/lib/types/resume";
 
+/** OpenAI 兼容 API 默认地址，可通过 OPENAI_BASE_URL 覆盖（如 DeepSeek） */
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
 
+/**
+ * 调用大模型进行简历优化分析。
+ * 要求服务端配置 OPENAI_API_KEY，返回结构化 JSON 结果。
+ */
 export async function callOptimizeAI(
   prompt: string,
   mode: OptimizeMode = "general",
@@ -12,7 +17,9 @@ export async function callOptimizeAI(
   const model = process.env.OPENAI_MODEL ?? DEFAULT_MODEL;
 
   if (!apiKey) {
-    return getMockResult(mode);
+    throw new Error(
+      "未配置 OPENAI_API_KEY，请在 .env.local 中设置后重启开发服务器",
+    );
   }
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -24,6 +31,7 @@ export async function callOptimizeAI(
     body: JSON.stringify({
       model,
       temperature: 0.4,
+      // 强制 JSON 输出，便于解析为 OptimizeResult
       response_format: { type: "json_object" },
       messages: [
         {
@@ -51,6 +59,7 @@ export async function callOptimizeAI(
   return normalizeResult(JSON.parse(content) as Partial<OptimizeResult>, mode);
 }
 
+/** 补全 AI 可能缺失的字段，定向模式下保留 JD 匹配相关字段 */
 function normalizeResult(
   raw: Partial<OptimizeResult>,
   mode: OptimizeMode,
@@ -73,6 +82,7 @@ function normalizeResult(
   };
 }
 
+/** 将 API 错误响应转为用户可读的中文提示 */
 function parseAIError(status: number, errorText: string): string {
   try {
     const body = JSON.parse(errorText) as {
@@ -94,78 +104,4 @@ function parseAIError(status: number, errorText: string): string {
   }
 
   return `AI 请求失败 (${status})，请稍后重试`;
-}
-
-function getMockResult(mode: OptimizeMode): OptimizeResult {
-  const base: OptimizeResult = {
-    score: 72,
-    summary:
-      "简历结构基本完整，但成果量化不足、关键词密度偏低，建议按 STAR 法则重写核心经历。",
-    fullOptimizedResume: `张三 | 前端开发工程师 | zhangsan@email.com
-
-工作经历
-2022.06 - 至今  XX科技  前端工程师
-- 主导公司后台管理系统架构设计与开发（React + TypeScript），交付 12+ 业务模块，支撑内部 200+ 日活用户
-- 建立 Code Review 机制与前端规范，团队缺陷率下降 30%
-- 定期组织技术分享，推动组件库沉淀，复用率提升 40%
-
-项目经历
-电商管理后台
-- 独立负责订单与商品模块，基于 Ant Design 搭建高可用管理界面，订单处理效率提升 25%
-
-技能：JavaScript、React、TypeScript、Vue、CSS、性能优化`,
-    issues: [
-      {
-        section: "工作经历",
-        severity: "high",
-        problem: "职责描述偏多，缺少可量化的业务成果",
-        suggestion:
-          "每条经历补充 1-2 个数字指标，如「提升转化率 23%」「支撑日活 50 万+」",
-      },
-      {
-        section: "项目经历",
-        severity: "medium",
-        problem: "技术栈罗列为主，未体现个人贡献与难点",
-        suggestion: "明确你在团队中的角色、负责模块、以及解决的关键技术问题",
-      },
-      {
-        section: "技能",
-        severity: "low",
-        problem: "技能列表未与目标岗位对齐",
-        suggestion: "将 JD 中的核心技能前置，并标注熟练程度",
-      },
-    ],
-    optimizedSections: [
-      {
-        title: "工作经历",
-        original: "负责公司后台管理系统开发",
-        optimized:
-          "主导公司后台管理系统架构设计与开发（React + TypeScript），交付 12+ 业务模块，支撑内部 200+ 日活用户",
-      },
-      {
-        title: "项目经历",
-        original: "参与电商后台管理系统开发",
-        optimized:
-          "独立负责订单与商品模块，基于 Ant Design 搭建管理界面，订单处理效率提升 25%",
-      },
-    ],
-    keywords: ["React", "TypeScript", "性能优化", "微服务", "敏捷开发"],
-    tips: [
-      "将最核心的 2-3 段经历放在简历前 1/3 区域",
-      "每段经历控制在 3-5 个要点，避免大段文字",
-      "投递前根据 JD 微调关键词，但勿堆砌造假",
-      "附 GitHub / 作品集链接可显著提升技术岗通过率",
-    ],
-  };
-
-  if (mode === "targeted") {
-    return {
-      ...base,
-      jdMatchRate: 68,
-      jdMatchSummary:
-        "React/TypeScript 技能匹配良好，但缺少 JD 要求的 Node.js 后端经验与大型项目规模描述，建议补充相关关键词。",
-    };
-  }
-
-  return base;
 }

@@ -1,5 +1,9 @@
 import type { OptimizeMode } from "@/lib/types/resume";
 
+/**
+ * 构建发送给大模型的简历优化 Prompt。
+ * 定向模式会附加 JD 文本，并要求返回匹配度字段。
+ */
 export function buildOptimizePrompt(
   resume: string,
   jobDescription: string | undefined,
