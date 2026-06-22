@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import AppModal from "./AppModal";
 import {
   clearHistory,
   deleteHistoryRecord,
@@ -21,6 +23,8 @@ export default function HistoryPanel({
   onRecordsChange,
   onRestore,
 }: HistoryPanelProps) {
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+
   // 删除历史记录
   function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation();
@@ -30,13 +34,18 @@ export default function HistoryPanel({
   // 清空全部历史记录
   function handleClear() {
     if (!records.length) return;
-    if (confirm("确定清空全部历史记录？")) {
-      clearHistory();
-      onRecordsChange([]);
-    }
+    setClearConfirmOpen(true);
+  }
+
+  // 确认清空全部历史记录
+  function confirmClear() {
+    clearHistory();
+    onRecordsChange([]);
+    setClearConfirmOpen(false);
   }
 
   return (
+    <>
     <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-4 flex items-center justify-between">
         <div>
@@ -114,5 +123,18 @@ export default function HistoryPanel({
         </ul>
       )}
     </section>
+
+    <AppModal
+      open={clearConfirmOpen}
+      title="清空历史记录"
+      message="确定清空全部历史记录？此操作不可恢复。"
+      type="confirm"
+      confirmLabel="清空"
+      cancelLabel="取消"
+      variant="danger"
+      onConfirm={confirmClear}
+      onCancel={() => setClearConfirmOpen(false)}
+    />
+    </>
   );
 }

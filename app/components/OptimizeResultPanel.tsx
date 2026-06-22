@@ -3,7 +3,9 @@
 import { useState } from "react";
 import ComparePanel from "./ComparePanel";
 import DownloadButton from "./DownloadButton";
+import OptimizeLoadingPanel from "./OptimizeLoadingPanel";
 import { formatOptimizeReport } from "@/lib/resume/export-report";
+import type { OptimizeLoadingState } from "@/lib/resume/optimize-stream";
 import type { OptimizeResult } from "@/lib/types/resume";
 
 const severityColor = {
@@ -17,8 +19,10 @@ type ResultTab = "analysis" | "compare";
 interface OptimizeResultPanelProps {
   result: OptimizeResult | null;
   loading: boolean;
+  loadingState: OptimizeLoadingState;
   originalResume: string;
   isTargeted: boolean;
+  onApplyOptimized?: (optimized: string) => void;
 }
 
 // 复制文本到剪贴板
@@ -64,8 +68,10 @@ function MatchRateBar({ rate, summary }: { rate: number; summary?: string }) {
 export default function OptimizeResultPanel({
   result,
   loading,
+  loadingState,
   originalResume,
   isTargeted,
+  onApplyOptimized,
 }: OptimizeResultPanelProps) {
   const [copied, setCopied] = useState("");
   const [tab, setTab] = useState<ResultTab>("analysis");
@@ -78,14 +84,7 @@ export default function OptimizeResultPanel({
   }
 
   if (loading) {
-    return (
-      <div className="flex h-full min-h-[320px] items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex flex-col items-center gap-3 text-sm text-zinc-500">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
-          AI 正在分析简历...
-        </div>
-      </div>
-    );
+    return <OptimizeLoadingPanel state={loadingState} />;
   }
 
   if (!result) {
@@ -131,6 +130,7 @@ export default function OptimizeResultPanel({
         <ComparePanel
           original={originalResume}
           optimized={result.fullOptimizedResume}
+          onApplyOptimized={onApplyOptimized}
         />
       ) : (
         <div className="space-y-5">

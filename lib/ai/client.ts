@@ -4,14 +4,7 @@ import type { OptimizeMode, OptimizeResult } from "@/lib/types/resume";
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
 
-/**
- * 调用大模型进行简历优化分析。
- * 要求服务端配置 OPENAI_API_KEY，返回结构化 JSON 结果。
- */
-export async function callOptimizeAI(
-  prompt: string,
-  mode: OptimizeMode = "general",
-): Promise<OptimizeResult> {
+function getAIConfig() {
   const apiKey = process.env.OPENAI_API_KEY;
   const baseUrl = process.env.OPENAI_BASE_URL ?? DEFAULT_BASE_URL;
   const model = process.env.OPENAI_MODEL ?? DEFAULT_MODEL;
@@ -22,26 +15,54 @@ export async function callOptimizeAI(
     );
   }
 
+  return { apiKey, baseUrl, model };
+}
+
+function buildChatBody(prompt: string, stream: boolean) {
+  const { model } = getAIConfig();
+  return {
+    model,
+    temperature: 0.4,
+    stream,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: "你是专业的简历优化顾问，只输出合法 JSON，不要输出任何其他文字。",
+      },
+      { role: "user", content: prompt },
+    ],
+  };
+}
+
+/**
+ * 调用大模型进行简历优化分析。
+ * 要求服务端配置 OPENAI_API_KEY，返回结构化 JSON 结果。
+ */
+export async function callOptimizeAI(
+  prompt: string,
+  mode: OptimizeMode = "general",
+): Promise<OptimizeResult> {
+  return callOptimizeAIStream(prompt, mode);
+}
+
+/**
+ * 流式调用大模型，通过 onProgress 回传已生成字符数。
+ */
+export async function callOptimizeAIStream(
+  prompt: string,
+  mode: OptimizeMode = "general",
+  onProgress?: (chars: number) => void,
+): Promise<OptimizeResult> {
+  const { apiKey, baseUrl } = getAIConfig();
+
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      temperature: 0.4,
-      // 强制 JSON 输出，便于解析为 OptimizeResult
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content:
-            "你是专业的简历优化顾问，只输出合法 JSON，不要输出任何其他文字。",
-        },
-        { role: "user", content: prompt },
-      ],
-    }),
+    body: JSON.stringify(buildChatBody(prompt, true)),
   });
 
   if (!response.ok) {
@@ -49,14 +70,57 @@ export async function callOptimizeAI(
     throw new Error(parseAIError(response.status, errorText));
   }
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("无法读取 AI 响应流");
+  }
 
-  if (!content) {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullContent = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) continue;
+
+      const payload = trimmed.slice(6);
+      if (payload === "[DONE]") continue;
+
+      try {
+        const parsed = JSON.parse(payload) as {
+          choices?: Array<{ delta?: { content?: string } }>;
+        };
+        const delta = parsed.choices?.[0]?.delta?.content;
+        if (delta) {
+          fullContent += delta;
+          onProgress?.(fullContent.length);
+        }
+      } catch {
+        // 忽略无法解析的 SSE 片段
+      }
+    }
+  }
+
+  if (!fullContent) {
     throw new Error("AI 返回内容为空");
   }
 
-  return normalizeResult(JSON.parse(content) as Partial<OptimizeResult>, mode);
+  let raw: Partial<OptimizeResult>;
+  try {
+    raw = JSON.parse(fullContent) as Partial<OptimizeResult>;
+  } catch {
+    throw new Error("AI 返回格式异常，请重试");
+  }
+
+  return normalizeResult(raw, mode);
 }
 
 /** 补全 AI 可能缺失的字段，定向模式下保留 JD 匹配相关字段 */

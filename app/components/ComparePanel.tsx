@@ -1,20 +1,28 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import AppModal from "./AppModal";
 import DownloadButton from "./DownloadButton";
 
 interface ComparePanelProps {
   original: string;
   optimized: string;
+  onApplyOptimized?: (optimized: string) => void;
 }
 
 // 左右对照查看原文与 AI 优化后的完整简历，滚动已同步
-export default function ComparePanel({ original, optimized }: ComparePanelProps) {
+export default function ComparePanel({
+  original,
+  optimized,
+  onApplyOptimized,
+}: ComparePanelProps) {
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
   const syncing = useRef(false);
+  const [applied, setApplied] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  /** 左右面板滚动联动，便于逐段对比 */
+  // 同步左右面板滚动
   function syncScroll(source: "left" | "right") {
     if (syncing.current) return;
     const left = leftRef.current;
@@ -32,17 +40,36 @@ export default function ComparePanel({ original, optimized }: ComparePanelProps)
     });
   }
 
+  // 确认应用优化版
+  function handleConfirmApply() {
+    onApplyOptimized?.(optimized);
+    setConfirmOpen(false);
+    setApplied(true);
+    setTimeout(() => setApplied(false), 2500);
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           左右对照查看原文与 AI 优化后的完整简历，滚动已同步
         </p>
-        <DownloadButton
-          content={optimized}
-          filenamePrefix="优化版简历"
-          label="下载优化版"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          {onApplyOptimized && (
+            <button
+              type="button"
+              onClick={() => setConfirmOpen(true)}
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 dark:hover:bg-emerald-900"
+            >
+              {applied ? "已应用到简历" : "应用优化版"}
+            </button>
+          )}
+          <DownloadButton
+            content={optimized}
+            filenamePrefix="优化版简历"
+            label="下载优化版"
+          />
+        </div>
       </div>
 
       <div className="grid min-w-0 gap-3 lg:grid-cols-2">
@@ -72,6 +99,17 @@ export default function ComparePanel({ original, optimized }: ComparePanelProps)
           </div>
         </div>
       </div>
+
+      <AppModal
+        open={confirmOpen}
+        title="应用优化版"
+        message="将用优化版替换左侧简历内容，当前编辑内容将被覆盖，是否继续？"
+        type="confirm"
+        confirmLabel="确认应用"
+        cancelLabel="取消"
+        onConfirm={handleConfirmApply}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

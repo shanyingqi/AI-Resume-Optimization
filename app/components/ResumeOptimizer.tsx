@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import HistoryPanel from "./HistoryPanel";
 import OptimizeResultPanel from "./OptimizeResultPanel";
 import ResumeUploader from "./ResumeUploader";
 import { DRAFT_STORAGE_KEY } from "@/lib/resume/constants";
 import { loadHistory, saveHistoryRecord } from "@/lib/resume/history";
+import {
+  consumeOptimizeStream,
+  INITIAL_LOADING_STATE,
+  type OptimizeLoadingState,
+} from "@/lib/resume/optimize-stream";
 import type { HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
 
 type InputTab = "upload" | "paste";
@@ -27,11 +32,16 @@ export default function ResumeOptimizer() {
   const [mode, setMode] = useState<OptimizeMode>("general");
   const [inputTab, setInputTab] = useState<InputTab>("upload");
   const [loading, setLoading] = useState(false);
+  const [loadingState, setLoadingState] = useState<OptimizeLoadingState>(
+    INITIAL_LOADING_STATE,
+  );
   const [error, setError] = useState("");
   const [result, setResult] = useState<OptimizeResult | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string>();
+  const [applyNotice, setApplyNotice] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
 
   // 初始化：加载历史记录，并尝试恢复未提交的草稿
   useEffect(() => {
@@ -58,6 +68,12 @@ export default function ResumeOptimizer() {
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
   }, [resume, jobDescription, mode, inputTab]);
 
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
   // 清空所有输入内容
   function handleClear() {
     setResume("");
@@ -80,26 +96,37 @@ export default function ResumeOptimizer() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  // 提交优化请求
+  // 将优化版简历应用到左侧编辑区
+  function handleApplyOptimized(optimized: string) {
+    setResume(optimized);
+    setResult(null);
+    setError("");
+    setActiveHistoryId(undefined);
+    setApplyNotice("已将优化版应用到简历内容，可继续编辑或再次优化");
+    setTimeout(() => setApplyNotice(""), 4000);
+    document.getElementById("resume")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // 提交优化请求（SSE 流式）
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
+    setLoadingState(INITIAL_LOADING_STATE);
     setError("");
     setResult(null);
     setActiveHistoryId(undefined);
+    setApplyNotice("");
 
     try {
-      const res = await fetch("/api/optimize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume, jobDescription, mode }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error ?? "请求失败");
-      }
+      const data = await consumeOptimizeStream(
+        { resume, jobDescription, mode },
+        setLoadingState,
+        controller.signal,
+      );
 
       setResult(data);
 
@@ -112,9 +139,11 @@ export default function ResumeOptimizer() {
       setHistoryRecords(loadHistory());
       setActiveHistoryId(record.id);
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "未知错误");
     } finally {
       setLoading(false);
+      abortRef.current = null;
     }
   }
 
@@ -148,8 +177,14 @@ export default function ResumeOptimizer() {
         </p>
       )}
 
-      <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-4">
+      {applyNotice && (
+        <p className="rounded-lg bg-emerald-50 px-4 py-2 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+          {applyNotice}
+        </p>
+      )}
+
+      <form onSubmit={handleSubmit} className="grid min-w-0 gap-6 lg:grid-cols-2">
+        <div className="min-w-0 space-y-4">
           <div className="flex rounded-lg border border-zinc-200 p-1 dark:border-zinc-700">
             <button
               type="button"
@@ -278,8 +313,10 @@ export default function ResumeOptimizer() {
         <OptimizeResultPanel
           result={result}
           loading={loading}
+          loadingState={loadingState}
           originalResume={resume}
           isTargeted={mode === "targeted"}
+          onApplyOptimized={handleApplyOptimized}
         />
       </form>
 
