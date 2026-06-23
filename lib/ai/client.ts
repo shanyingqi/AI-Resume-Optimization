@@ -1,4 +1,4 @@
-import type { OptimizeMode, OptimizeResult } from "@/lib/types/resume";
+import type { CoverLetterResult, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
 
 /** OpenAI 兼容 API 默认地址，可通过 OPENAI_BASE_URL 覆盖（如 DeepSeek） */
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
@@ -18,7 +18,11 @@ function getAIConfig() {
   return { apiKey, baseUrl, model };
 }
 
-function buildChatBody(prompt: string, stream: boolean) {
+function buildChatBody(
+  prompt: string,
+  stream: boolean,
+  system = "你是专业的简历优化顾问，只输出合法 JSON，不要输出任何其他文字。",
+) {
   const { model } = getAIConfig();
   return {
     model,
@@ -26,10 +30,7 @@ function buildChatBody(prompt: string, stream: boolean) {
     stream,
     response_format: { type: "json_object" },
     messages: [
-      {
-        role: "system",
-        content: "你是专业的简历优化顾问，只输出合法 JSON，不要输出任何其他文字。",
-      },
+      { role: "system", content: system },
       { role: "user", content: prompt },
     ],
   };
@@ -128,6 +129,58 @@ export async function callOptimizeAIStream(
   }
 
   return normalizeResult(raw, mode);
+}
+
+/** 根据简历与 JD 生成求职信 */
+export async function callCoverLetterAI(
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<CoverLetterResult> {
+  const { apiKey, baseUrl } = getAIConfig();
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(
+      buildChatBody(
+        prompt,
+        false,
+        "你是专业的求职顾问，只输出合法 JSON，不要输出任何其他文字。",
+      ),
+    ),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(parseAIError(response.status, errorText));
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+
+  if (!content) {
+    throw new Error("AI 返回内容为空");
+  }
+
+  let raw: Partial<CoverLetterResult>;
+  try {
+    raw = JSON.parse(content) as Partial<CoverLetterResult>;
+  } catch {
+    throw new Error("AI 返回格式异常，请重试");
+  }
+
+  if (!raw.fullText?.trim()) {
+    throw new Error("AI 未生成求职信内容，请重试");
+  }
+
+  return {
+    fullText: raw.fullText.trim(),
+    highlights: raw.highlights ?? [],
+  };
 }
 
 /** 补全 AI 可能缺失的字段，定向模式下保留 JD 匹配相关字段 */

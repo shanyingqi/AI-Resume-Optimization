@@ -35,3 +35,17 @@ export function validateOptimizeInput(
 
   return validateJobDescriptionLength(jobDescription);
 }
+
+export function validateCoverLetterInput(
+  resume: string,
+  jobDescription: string,
+): string | null {
+  const resumeError = validateResumeLength(resume);
+  if (resumeError) return resumeError;
+
+  if (!jobDescription?.trim()) {
+    return "生成求职信需要提供目标岗位 JD";
+  }
+
+  return validateJobDescriptionLength(jobDescription);
+}

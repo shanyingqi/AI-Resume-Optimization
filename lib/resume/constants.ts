@@ -16,6 +16,9 @@ export const OPTIMIZE_RATE_LIMIT = 10;
 /** 文件解析接口：每 IP 每小时最大请求次数 */
 export const PARSE_RATE_LIMIT = 30;
 
+/** 求职信接口：每 IP 每小时最大请求次数 */
+export const COVER_LETTER_RATE_LIMIT = 10;
+
 /** 频率限制时间窗口（毫秒） */
 export const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 

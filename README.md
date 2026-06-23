@@ -13,6 +13,7 @@
 - **分析报告**：综合评分、问题诊断、改写示例、关键词与求职建议
 - **JD 匹配度**：定向模式下显示匹配百分比与说明
 - **左右对比**：原文与优化版并排查看，差异高亮（删除标红 / 新增标绿），滚动同步
+- **求职信生成**：定向优化完成后，基于同一简历 + JD 一键生成 Cover Letter
 - **应用优化版**：一键将优化结果写回编辑区，继续修改或再次优化
 - **导出**：支持 PDF / Word 下载，导出失败弹窗提示
 - **历史记录**：自动保存最近 20 条优化记录，支持恢复与删除
@@ -72,6 +73,7 @@ npm start
 |------|----------|
 | `POST /api/optimize` | 每 IP 每小时 10 次 |
 | `POST /api/parse-resume` | 每 IP 每小时 30 次 |
+| `POST /api/cover-letter` | 每 IP 每小时 10 次 |
 
 超出限制返回 `429`，响应头包含 `Retry-After`。当前为内存计数，**多实例部署需改用 Redis 等共享存储**。
 
@@ -83,6 +85,7 @@ npm start
 app/
   api/
     optimize/              # 简历 AI 优化（SSE 流式）
+    cover-letter/          # 求职信生成
     parse-resume/          # PDF / DOCX 解析
   components/
     ResumeOptimizer.tsx    # 主页面逻辑
@@ -90,6 +93,7 @@ app/
     OptimizeResultPanel.tsx
     OptimizeLoadingPanel.tsx
     ComparePanel.tsx       # 左右对比 + 差异高亮
+    CoverLetterPanel.tsx   # 求职信生成
     DownloadButton.tsx     # PDF / Word 导出
     ExportOverlay.tsx      # 导出全屏遮罩
     AppModal.tsx           # 确认 / 错误弹窗
@@ -100,7 +104,9 @@ lib/
     stream-events.ts       # SSE 事件类型
   api/
     rate-limit.ts          # IP 频率限制
-  prompts/optimize-resume.ts
+  prompts/
+    optimize-resume.ts
+    cover-letter.ts
   resume/
     parse-server.ts        # 服务端文档解析
     history.ts             # 历史记录

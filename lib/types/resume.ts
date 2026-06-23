@@ -36,6 +36,19 @@ export interface OptimizeResult {
   tips: string[];
 }
 
+export interface CoverLetterRequest {
+  resume: string;
+  jobDescription: string;
+}
+
+/** AI 生成的求职信 */
+export interface CoverLetterResult {
+  /** 完整求职信正文（含称呼与落款，可直接使用） */
+  fullText: string;
+  /** 与 JD 匹配的核心亮点（3-5 条） */
+  highlights: string[];
+}
+
 /** 保存在 localStorage 中的历史记录条目 */
 export interface HistoryRecord {
   id: string;
