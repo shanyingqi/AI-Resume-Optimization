@@ -7,6 +7,7 @@ import {
   deleteHistoryRecord,
   formatHistoryTime,
 } from "@/lib/resume/history";
+import { RESUME_TEMPLATES } from "@/app/components/resume-templates/registry";
 import type { HistoryRecord } from "@/lib/types/resume";
 
 interface HistoryPanelProps {
@@ -99,6 +100,17 @@ export default function HistoryPanel({
                       {record.coverLetter && (
                         <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                           含求职信
+                        </span>
+                      )}
+                      {record.result.structuredResume && (
+                        <span className="rounded bg-violet-100 px-1.5 py-0.5 text-xs text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                          可导出 Word
+                        </span>
+                      )}
+                      {record.resumeTemplateId && record.resumeTemplateId !== "classic" && (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                          {RESUME_TEMPLATES.find((t) => t.id === record.resumeTemplateId)?.name ??
+                            "自定义模板"}
                         </span>
                       )}
                     </div>

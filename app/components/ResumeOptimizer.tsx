@@ -5,14 +5,14 @@ import HistoryPanel from "./HistoryPanel";
 import OptimizeResultPanel from "./OptimizeResultPanel";
 import ResumeUploader from "./ResumeUploader";
 import { DRAFT_STORAGE_KEY, MAX_JD_CHARS, MAX_RESUME_CHARS } from "@/lib/resume/constants";
-import { loadHistory, saveHistoryRecord, updateHistoryCoverLetter } from "@/lib/resume/history";
+import { loadHistory, saveHistoryRecord, updateHistoryCoverLetter, updateHistoryTemplate } from "@/lib/resume/history";
 import {
   consumeOptimizeStream,
   INITIAL_LOADING_STATE,
   type OptimizeLoadingState,
 } from "@/lib/resume/optimize-stream";
 import { validateOptimizeInput } from "@/lib/resume/validate";
-import type { CoverLetterResult, HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
+import type { CoverLetterResult, HistoryRecord, OptimizeMode, OptimizeResult, ResumeTemplateId } from "@/lib/types/resume";
 
 type InputTab = "upload" | "paste";
 
@@ -41,6 +41,7 @@ export default function ResumeOptimizer() {
   const [draftRestored, setDraftRestored] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string>();
+  const [resumeTemplateId, setResumeTemplateId] = useState<ResumeTemplateId>("classic");
   const [applyNotice, setApplyNotice] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
@@ -82,6 +83,7 @@ export default function ResumeOptimizer() {
     setResult(null);
     setError("");
     setActiveHistoryId(undefined);
+    setResumeTemplateId("classic");
     localStorage.removeItem(DRAFT_STORAGE_KEY);
     setDraftRestored(false);
   }
@@ -93,6 +95,7 @@ export default function ResumeOptimizer() {
     setMode(record.mode);
     setResult(record.result);
     setActiveHistoryId(record.id);
+    setResumeTemplateId(record.resumeTemplateId ?? "classic");
     setError("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -135,6 +138,7 @@ export default function ResumeOptimizer() {
     setError("");
     setResult(null);
     setActiveHistoryId(undefined);
+    setResumeTemplateId("classic");
     setApplyNotice("");
 
     try {
@@ -168,9 +172,18 @@ export default function ResumeOptimizer() {
   const activeRecord = historyRecords.find((r) => r.id === activeHistoryId);
   const savedCoverLetter = activeRecord?.coverLetter;
 
+  // 保存求职信到历史记录
   function handleCoverLetterSaved(coverLetter: CoverLetterResult) {
     if (!activeHistoryId) return;
     setHistoryRecords(updateHistoryCoverLetter(activeHistoryId, coverLetter));
+  }
+
+  // 切换简历模板
+  function handleTemplateChange(templateId: ResumeTemplateId) {
+    setResumeTemplateId(templateId);
+    if (activeHistoryId) {
+      setHistoryRecords(updateHistoryTemplate(activeHistoryId, templateId));
+    }
   }
 
   const resumeOverLimit = charCount > MAX_RESUME_CHARS;
@@ -377,6 +390,8 @@ export default function ResumeOptimizer() {
           isTargeted={mode === "targeted"}
           activeHistoryId={activeHistoryId}
           savedCoverLetter={savedCoverLetter}
+          resumeTemplateId={resumeTemplateId}
+          onTemplateChange={handleTemplateChange}
           onCoverLetterSaved={handleCoverLetterSaved}
           onApplyOptimized={handleApplyOptimized}
           onCancel={handleCancel}

@@ -20,6 +20,54 @@ export interface OptimizedSection {
   optimized: string;
 }
 
+/** 简历基本信息 */
+export interface ResumeBasics {
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  links?: string[];
+}
+
+export interface ResumeExperience {
+  company: string;
+  role: string;
+  period?: string;
+  highlights: string[];
+}
+
+export interface ResumeEducation {
+  school: string;
+  degree?: string;
+  major?: string;
+  period?: string;
+}
+
+export interface ResumeProject {
+  name: string;
+  description?: string;
+  highlights: string[];
+  techStack?: string[];
+}
+
+export interface ResumeSkillGroup {
+  category?: string;
+  items: string[];
+}
+
+/** 结构化简历，用于模板预览与矢量 PDF 导出 */
+export interface StructuredResume {
+  basics: ResumeBasics;
+  summary?: string;
+  experience: ResumeExperience[];
+  education: ResumeEducation[];
+  projects: ResumeProject[];
+  skills: ResumeSkillGroup[];
+}
+
+export type ResumeTemplateId = "classic" | "modern" | "sidebar";
+
 /** AI 优化分析的完整返回结构 */
 export interface OptimizeResult {
   score: number;
@@ -30,6 +78,8 @@ export interface OptimizeResult {
   jdMatchSummary?: string;
   /** 完整优化版简历全文，用于左右对比 */
   fullOptimizedResume: string;
+  /** 结构化简历，用于模板预览与导出 */
+  structuredResume?: StructuredResume;
   issues: ResumeIssue[];
   optimizedSections: OptimizedSection[];
   keywords: string[];
@@ -64,4 +114,6 @@ export interface HistoryRecord {
   result: OptimizeResult;
   /** 同一次优化会话中生成的求职信 */
   coverLetter?: CoverLetterResult;
+  /** 用户选择的简历模板 */
+  resumeTemplateId?: ResumeTemplateId;
 }
