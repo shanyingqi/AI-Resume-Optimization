@@ -13,9 +13,13 @@
 - **分析报告**：综合评分、问题诊断、改写示例、关键词与求职建议
 - **JD 匹配度**：定向模式下显示匹配百分比与说明
 - **左右对比**：原文与优化版并排查看，差异高亮（删除标红 / 新增标绿），滚动同步
+- **简历模板预览**：AI 输出结构化简历，支持三种模板实时预览
+  - 简约单栏、现代顶栏、侧栏布局
+  - 模板选择会随历史记录一并保存
+- **简历导出**：基于模板导出矢量 PDF 或 Word，导出失败弹窗提示
+- **报告 / 求职信导出**：分析报告与求职信支持 PDF / Word 文本下载
 - **求职信生成**：定向优化完成后，基于同一简历 + JD 一键生成 Cover Letter
 - **应用优化版**：一键将优化结果写回编辑区，继续修改或再次优化
-- **导出**：支持 PDF / Word 下载，导出失败弹窗提示
 - **历史记录**：自动保存最近 20 条优化记录，支持恢复与删除
 - **草稿保存**：刷新页面可恢复未完成的编辑内容
 - **接口限流**：按 IP 限制优化与文件解析频率，防止 API Key 被滥用
@@ -28,7 +32,9 @@
 - OpenAI 兼容 API（OpenAI / DeepSeek / 通义等）
 - [mammoth](https://www.npmjs.com/package/mammoth)（DOCX 解析）
 - [unpdf](https://www.npmjs.com/package/unpdf)（PDF 解析）
-- [docx](https://www.npmjs.com/package/docx) + [jspdf](https://www.npmjs.com/package/jspdf)（报告导出）
+- [@react-pdf/renderer](https://react-pdf.org) + [pdf-lib](https://pdf-lib.js.org)（简历矢量 PDF 导出）
+- [docx](https://www.npmjs.com/package/docx)（简历 / 报告 Word 导出）
+- [html2canvas](https://www.npmjs.com/package/html2canvas) + [jspdf](https://www.npmjs.com/package/jspdf)（报告文本 PDF 导出）
 
 ## 快速开始
 
@@ -93,8 +99,11 @@ app/
     OptimizeResultPanel.tsx
     OptimizeLoadingPanel.tsx
     ComparePanel.tsx       # 左右对比 + 差异高亮
+    ResumePreviewPanel.tsx # 简历模板预览
+    ResumeExportButton.tsx # 简历 PDF / Word 导出
+    resume-templates/      # 简历模板组件（classic / modern / sidebar）
     CoverLetterPanel.tsx   # 求职信生成
-    DownloadButton.tsx     # PDF / Word 导出
+    DownloadButton.tsx     # 报告 / 求职信 PDF / Word 导出
     ExportOverlay.tsx      # 导出全屏遮罩
     AppModal.tsx           # 确认 / 错误弹窗
     HistoryPanel.tsx       # 历史记录
@@ -109,11 +118,15 @@ lib/
     cover-letter.ts
   resume/
     parse-server.ts        # 服务端文档解析
+    structured-resume.ts   # 结构化简历解析与兜底
     history.ts             # 历史记录
     export-report.ts       # 报告文本格式化
-    export-document.ts     # PDF / Word 导出
+    export-document.ts     # 报告 / 求职信 PDF / Word 导出
+    export-resume-docx.ts  # 简历 Word 导出
+    pdf/                   # 简历矢量 PDF 导出（@react-pdf/renderer）
     optimize-stream.ts     # 客户端 SSE 消费
     text-diff.ts           # 行级差异对比
+    template-tokens.ts     # 模板样式令牌
     validate.ts            # 字数校验
     constants.ts
   types/resume.ts
