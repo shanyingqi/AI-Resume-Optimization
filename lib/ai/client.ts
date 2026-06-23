@@ -1,4 +1,5 @@
 import type { CoverLetterResult, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
+import { normalizeStructuredResume } from "@/lib/resume/structured-resume";
 
 /** OpenAI 兼容 API 默认地址，可通过 OPENAI_BASE_URL 覆盖（如 DeepSeek） */
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
@@ -194,13 +195,18 @@ function normalizeResult(
   const fallbackResume = optimizedSections
     .map((s) => `【${s.title}】\n${s.optimized}`)
     .join("\n\n");
+  const fullOptimizedResume = raw.fullOptimizedResume?.trim() || fallbackResume;
 
   return {
     score: raw.score ?? 0,
     summary: raw.summary ?? "",
     jdMatchRate: mode === "targeted" ? raw.jdMatchRate : undefined,
     jdMatchSummary: mode === "targeted" ? raw.jdMatchSummary : undefined,
-    fullOptimizedResume: raw.fullOptimizedResume?.trim() || fallbackResume,
+    fullOptimizedResume,
+    structuredResume: normalizeStructuredResume(
+      (raw as Partial<OptimizeResult>).structuredResume,
+      fullOptimizedResume,
+    ),
     issues: raw.issues ?? [],
     optimizedSections,
     keywords: raw.keywords ?? [],

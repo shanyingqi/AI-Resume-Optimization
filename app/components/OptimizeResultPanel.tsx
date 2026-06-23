@@ -5,9 +5,10 @@ import ComparePanel from "./ComparePanel";
 import CoverLetterPanel from "./CoverLetterPanel";
 import DownloadButton from "./DownloadButton";
 import OptimizeLoadingPanel from "./OptimizeLoadingPanel";
+import ResumePreviewPanel from "./ResumePreviewPanel";
 import { formatOptimizeReport } from "@/lib/resume/export-report";
 import type { OptimizeLoadingState } from "@/lib/resume/optimize-stream";
-import type { CoverLetterResult, OptimizeResult } from "@/lib/types/resume";
+import type { CoverLetterResult, OptimizeResult, ResumeTemplateId } from "@/lib/types/resume";
 
 const severityColor = {
   high: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
@@ -15,7 +16,7 @@ const severityColor = {
   low: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
 } as const;
 
-type ResultTab = "analysis" | "compare" | "cover-letter";
+type ResultTab = "analysis" | "compare" | "preview" | "cover-letter";
 
 interface OptimizeResultPanelProps {
   result: OptimizeResult | null;
@@ -26,6 +27,8 @@ interface OptimizeResultPanelProps {
   isTargeted: boolean;
   activeHistoryId?: string;
   savedCoverLetter?: CoverLetterResult | null;
+  resumeTemplateId: ResumeTemplateId;
+  onTemplateChange: (templateId: ResumeTemplateId) => void;
   onCoverLetterSaved?: (coverLetter: CoverLetterResult) => void;
   onApplyOptimized?: (optimized: string) => void;
   onCancel?: () => void;
@@ -80,6 +83,8 @@ export default function OptimizeResultPanel({
   isTargeted,
   activeHistoryId,
   savedCoverLetter,
+  resumeTemplateId,
+  onTemplateChange,
   onCoverLetterSaved,
   onApplyOptimized,
   onCancel,
@@ -89,9 +94,14 @@ export default function OptimizeResultPanel({
 
   const showCoverLetter = isTargeted && jobDescription.trim().length > 0;
 
+  // 根据历史记录自动选择 tab
   useEffect(() => {
+    if (!activeHistoryId) return;
     if (savedCoverLetter) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTab("cover-letter");
+    } else {
+      setTab("preview");
     }
   }, [activeHistoryId, savedCoverLetter]);
 
@@ -109,7 +119,7 @@ export default function OptimizeResultPanel({
   if (!result) {
     return (
       <div className="flex h-full min-h-[320px] items-center justify-center rounded-xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
-        优化结果将显示在这里，包括评分、JD 匹配度、左右对比与问题诊断
+        优化结果将显示在这里，包括评分、JD 匹配度、左右对比、简历预览与问题诊断
       </div>
     );
   }
@@ -143,6 +153,17 @@ export default function OptimizeResultPanel({
         >
           左右对比
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("preview")}
+          className={`flex-1 rounded-md px-3 py-2 text-sm transition ${
+            tab === "preview"
+              ? "bg-emerald-600 text-white"
+              : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          }`}
+        >
+          简历预览
+        </button>
         {showCoverLetter && (
           <button
             type="button"
@@ -162,7 +183,16 @@ export default function OptimizeResultPanel({
         <ComparePanel
           original={originalResume}
           optimized={result.fullOptimizedResume}
+          structuredResume={result.structuredResume}
+          templateId={resumeTemplateId}
           onApplyOptimized={onApplyOptimized}
+        />
+      ) : tab === "preview" ? (
+        <ResumePreviewPanel
+          structuredResume={result.structuredResume}
+          fullOptimizedResume={result.fullOptimizedResume}
+          templateId={resumeTemplateId}
+          onTemplateChange={onTemplateChange}
         />
       ) : tab === "cover-letter" && showCoverLetter ? (
         <CoverLetterPanel

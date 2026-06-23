@@ -1,5 +1,5 @@
 import { HISTORY_STORAGE_KEY, MAX_HISTORY_RECORDS } from "@/lib/resume/constants";
-import type { CoverLetterResult, HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
+import type { CoverLetterResult, HistoryRecord, OptimizeMode, OptimizeResult, ResumeTemplateId } from "@/lib/types/resume";
 
 function preview(text: string, max = 80): string {
   const trimmed = text.trim().replace(/\s+/g, " ");
@@ -55,6 +55,18 @@ export function updateHistoryCoverLetter(
 ): HistoryRecord[] {
   const next = loadHistory().map((record) =>
     record.id === id ? { ...record, coverLetter } : record,
+  );
+  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
+/** 更新历史记录中的简历模板选择 */
+export function updateHistoryTemplate(
+  id: string,
+  templateId: ResumeTemplateId,
+): HistoryRecord[] {
+  const next = loadHistory().map((record) =>
+    record.id === id ? { ...record, resumeTemplateId: templateId } : record,
   );
   localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
   return next;

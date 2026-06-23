@@ -2,13 +2,17 @@
 
 import { useMemo, useRef, useState } from "react";
 import AppModal from "./AppModal";
-import DownloadButton from "./DownloadButton";
+import ResumeExportButton from "./ResumeExportButton";
 import type { DiffCell } from "@/lib/resume/text-diff";
 import { diffResumeLines } from "@/lib/resume/text-diff";
+import { resolveStructuredResume } from "@/lib/resume/structured-resume";
+import type { ResumeTemplateId, StructuredResume } from "@/lib/types/resume";
 
 interface ComparePanelProps {
   original: string;
   optimized: string;
+  structuredResume?: StructuredResume;
+  templateId: ResumeTemplateId;
   onApplyOptimized?: (optimized: string) => void;
 }
 
@@ -39,9 +43,12 @@ function DiffCellView({ cell, side }: { cell: DiffCell; side: "left" | "right" }
   );
 }
 
+// 左右对比面板
 export default function ComparePanel({
   original,
   optimized,
+  structuredResume,
+  templateId,
   onApplyOptimized,
 }: ComparePanelProps) {
   const leftRef = useRef<HTMLDivElement>(null);
@@ -53,6 +60,12 @@ export default function ComparePanel({
   const rows = useMemo(
     () => diffResumeLines(original, optimized),
     [original, optimized],
+  );
+
+  // 解析结构化简历
+  const resumeData = useMemo(
+    () => resolveStructuredResume(structuredResume, optimized),
+    [structuredResume, optimized],
   );
 
   // 同步滚动
@@ -109,10 +122,11 @@ export default function ComparePanel({
               {applied ? "已应用到简历" : "应用优化版"}
             </button>
           )}
-          <DownloadButton
-            content={optimized}
+          <ResumeExportButton
+            data={resumeData}
+            templateId={templateId}
             filenamePrefix="优化版简历"
-            label="下载优化版"
+            label="导出 Word"
           />
         </div>
       </div>
