@@ -104,7 +104,7 @@ export default function HistoryPanel({
                       )}
                       {record.result.structuredResume && (
                         <span className="rounded bg-violet-100 px-1.5 py-0.5 text-xs text-violet-700 dark:bg-violet-950 dark:text-violet-300">
-                          可导出 Word
+                          可模板导出
                         </span>
                       )}
                       {record.resumeTemplateId && record.resumeTemplateId !== "classic" && (

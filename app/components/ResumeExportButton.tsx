@@ -12,7 +12,7 @@ interface ResumeExportButtonProps {
   templateId: ResumeTemplateId;
   filenamePrefix?: string;
   label?: string;
-  /** 是否显示 PDF 导出（默认仅 Word） */
+  /** 是否显示 PDF 导出（默认开启） */
   pdfEnabled?: boolean;
 }
 
@@ -22,7 +22,7 @@ export default function ResumeExportButton({
   templateId,
   filenamePrefix = "优化简历",
   label = "导出简历",
-  pdfEnabled = false,
+  pdfEnabled = true,
 }: ResumeExportButtonProps) {
   const [format, setFormat] = useState<ExportFormat>(pdfEnabled ? "pdf" : "docx");
   const [exporting, setExporting] = useState(false);

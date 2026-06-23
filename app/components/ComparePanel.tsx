@@ -126,7 +126,6 @@ export default function ComparePanel({
             data={resumeData}
             templateId={templateId}
             filenamePrefix="优化版简历"
-            label="导出 Word"
           />
         </div>
       </div>
