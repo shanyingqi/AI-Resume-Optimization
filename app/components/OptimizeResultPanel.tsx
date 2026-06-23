@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ComparePanel from "./ComparePanel";
 import CoverLetterPanel from "./CoverLetterPanel";
 import DownloadButton from "./DownloadButton";
 import OptimizeLoadingPanel from "./OptimizeLoadingPanel";
 import { formatOptimizeReport } from "@/lib/resume/export-report";
 import type { OptimizeLoadingState } from "@/lib/resume/optimize-stream";
-import type { OptimizeResult } from "@/lib/types/resume";
+import type { CoverLetterResult, OptimizeResult } from "@/lib/types/resume";
 
 const severityColor = {
   high: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
@@ -24,6 +24,9 @@ interface OptimizeResultPanelProps {
   originalResume: string;
   jobDescription: string;
   isTargeted: boolean;
+  activeHistoryId?: string;
+  savedCoverLetter?: CoverLetterResult | null;
+  onCoverLetterSaved?: (coverLetter: CoverLetterResult) => void;
   onApplyOptimized?: (optimized: string) => void;
   onCancel?: () => void;
 }
@@ -75,11 +78,22 @@ export default function OptimizeResultPanel({
   originalResume,
   jobDescription,
   isTargeted,
+  activeHistoryId,
+  savedCoverLetter,
+  onCoverLetterSaved,
   onApplyOptimized,
   onCancel,
 }: OptimizeResultPanelProps) {
   const [copied, setCopied] = useState("");
   const [tab, setTab] = useState<ResultTab>("analysis");
+
+  const showCoverLetter = isTargeted && jobDescription.trim().length > 0;
+
+  useEffect(() => {
+    if (savedCoverLetter) {
+      setTab("cover-letter");
+    }
+  }, [activeHistoryId, savedCoverLetter]);
 
   // 复制文本到剪贴板
   async function handleCopy(label: string, text: string) {
@@ -103,8 +117,6 @@ export default function OptimizeResultPanel({
   const optimizedText = result.optimizedSections
     .map((s) => `【${s.title}】\n${s.optimized}`)
     .join("\n\n");
-
-  const showCoverLetter = isTargeted && jobDescription.trim().length > 0;
 
   return (
     <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
@@ -154,8 +166,12 @@ export default function OptimizeResultPanel({
         />
       ) : tab === "cover-letter" && showCoverLetter ? (
         <CoverLetterPanel
+          key={activeHistoryId ?? "new"}
           resume={originalResume}
           jobDescription={jobDescription}
+          historyId={activeHistoryId}
+          initialCoverLetter={savedCoverLetter}
+          onSaved={onCoverLetterSaved}
         />
       ) : (
         <div className="space-y-5">

@@ -4,6 +4,7 @@ import type { CoverLetterResult, OptimizeMode, OptimizeResult } from "@/lib/type
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
 
+// 获取 AI 配置
 function getAIConfig() {
   const apiKey = process.env.OPENAI_API_KEY;
   const baseUrl = process.env.OPENAI_BASE_URL ?? DEFAULT_BASE_URL;
@@ -18,6 +19,7 @@ function getAIConfig() {
   return { apiKey, baseUrl, model };
 }
 
+// 构建聊天请求体
 function buildChatBody(
   prompt: string,
   stream: boolean,

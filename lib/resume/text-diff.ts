@@ -15,6 +15,7 @@ type DiffOp =
   | { type: "insert"; text: string }
   | { type: "delete"; text: string };
 
+/** 构建最长公共子序列的动态规划表 */
 function buildLcsTable(a: string[], b: string[]): number[][] {
   const m = a.length;
   const n = b.length;
@@ -33,6 +34,7 @@ function buildLcsTable(a: string[], b: string[]): number[][] {
   return dp;
 }
 
+/** 从动态规划表回溯差异操作序列 */
 function backtrackOps(a: string[], b: string[], dp: number[][]): DiffOp[] {
   const ops: DiffOp[] = [];
   let i = a.length;
@@ -55,6 +57,7 @@ function backtrackOps(a: string[], b: string[], dp: number[][]): DiffOp[] {
   return ops;
 }
 
+/** 将差异操作序列转换为对齐的行 */
 function opsToRows(ops: DiffOp[]): DiffRow[] {
   return ops.map((op) => {
     if (op.type === "equal") {

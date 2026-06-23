@@ -12,6 +12,7 @@ interface ComparePanelProps {
   onApplyOptimized?: (optimized: string) => void;
 }
 
+// 计算单元格样式
 function cellClass(cell: DiffCell, side: "left" | "right"): string {
   if (cell.type === "empty") {
     return "min-h-[1.6em] bg-zinc-50/80 dark:bg-zinc-800/30";
@@ -27,6 +28,7 @@ function cellClass(cell: DiffCell, side: "left" | "right"): string {
     : "text-zinc-700 dark:text-zinc-300";
 }
 
+// 渲染差异单元格
 function DiffCellView({ cell, side }: { cell: DiffCell; side: "left" | "right" }) {
   return (
     <div
@@ -53,6 +55,7 @@ export default function ComparePanel({
     [original, optimized],
   );
 
+  // 同步滚动
   function syncScroll(source: "left" | "right") {
     if (syncing.current) return;
     const left = leftRef.current;
@@ -70,6 +73,7 @@ export default function ComparePanel({
     });
   }
 
+  // 确认应用优化版
   function handleConfirmApply() {
     onApplyOptimized?.(optimized);
     setConfirmOpen(false);

@@ -4,6 +4,7 @@ import {
 } from "@/lib/resume/constants";
 import type { OptimizeMode } from "@/lib/types/resume";
 
+// 验证简历内容长度
 export function validateResumeLength(resume: string): string | null {
   const len = resume.trim().length;
   if (len === 0) return "请提供简历内容";
@@ -13,6 +14,7 @@ export function validateResumeLength(resume: string): string | null {
   return null;
 }
 
+// 验证岗位 JD 长度
 export function validateJobDescriptionLength(jd: string | undefined): string | null {
   const len = jd?.trim().length ?? 0;
   if (len > MAX_JD_CHARS) {
@@ -21,6 +23,7 @@ export function validateJobDescriptionLength(jd: string | undefined): string | n
   return null;
 }
 
+// 验证优化输入
 export function validateOptimizeInput(
   resume: string,
   jobDescription: string | undefined,
@@ -36,6 +39,7 @@ export function validateOptimizeInput(
   return validateJobDescriptionLength(jobDescription);
 }
 
+// 验证求职信输入
 export function validateCoverLetterInput(
   resume: string,
   jobDescription: string,
