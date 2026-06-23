@@ -6,6 +6,6 @@ export async function downloadResumePdf(
   templateId: ResumeTemplateId,
   filenamePrefix: string,
 ) {
-  const { downloadResumePdf: exportPdf } = await import("./pdf-lib-resume-export");
+  const { downloadResumePdf: exportPdf } = await import("./react-pdf-resume-export");
   await exportPdf(data, templateId, filenamePrefix);
 }

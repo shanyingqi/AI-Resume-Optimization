@@ -37,17 +37,13 @@ export default function ResumePreviewPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            选择模板预览优化版简历，可导出 Word
+            选择模板预览优化版简历，支持导出 PDF 或 Word
           </p>
           {activeTemplate && (
             <p className="mt-0.5 text-xs text-zinc-500">{activeTemplate.description}</p>
           )}
         </div>
-        <ResumeExportButton
-          data={resumeData}
-          templateId={templateId}
-          label="导出 Word"
-        />
+        <ResumeExportButton data={resumeData} templateId={templateId} />
       </div>
 
       <div className="flex flex-wrap gap-2">
