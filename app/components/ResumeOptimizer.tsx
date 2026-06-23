@@ -365,6 +365,7 @@ export default function ResumeOptimizer() {
           loading={loading}
           loadingState={loadingState}
           originalResume={resume}
+          jobDescription={jobDescription}
           isTargeted={mode === "targeted"}
           onApplyOptimized={handleApplyOptimized}
           onCancel={handleCancel}

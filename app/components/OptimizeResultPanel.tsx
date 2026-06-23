@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ComparePanel from "./ComparePanel";
+import CoverLetterPanel from "./CoverLetterPanel";
 import DownloadButton from "./DownloadButton";
 import OptimizeLoadingPanel from "./OptimizeLoadingPanel";
 import { formatOptimizeReport } from "@/lib/resume/export-report";
@@ -14,13 +15,14 @@ const severityColor = {
   low: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
 } as const;
 
-type ResultTab = "analysis" | "compare";
+type ResultTab = "analysis" | "compare" | "cover-letter";
 
 interface OptimizeResultPanelProps {
   result: OptimizeResult | null;
   loading: boolean;
   loadingState: OptimizeLoadingState;
   originalResume: string;
+  jobDescription: string;
   isTargeted: boolean;
   onApplyOptimized?: (optimized: string) => void;
   onCancel?: () => void;
@@ -71,6 +73,7 @@ export default function OptimizeResultPanel({
   loading,
   loadingState,
   originalResume,
+  jobDescription,
   isTargeted,
   onApplyOptimized,
   onCancel,
@@ -101,6 +104,8 @@ export default function OptimizeResultPanel({
     .map((s) => `【${s.title}】\n${s.optimized}`)
     .join("\n\n");
 
+  const showCoverLetter = isTargeted && jobDescription.trim().length > 0;
+
   return (
     <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex rounded-lg border border-zinc-200 p-1 dark:border-zinc-700">
@@ -126,6 +131,19 @@ export default function OptimizeResultPanel({
         >
           左右对比
         </button>
+        {showCoverLetter && (
+          <button
+            type="button"
+            onClick={() => setTab("cover-letter")}
+            className={`flex-1 rounded-md px-3 py-2 text-sm transition ${
+              tab === "cover-letter"
+                ? "bg-emerald-600 text-white"
+                : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            }`}
+          >
+            求职信
+          </button>
+        )}
       </div>
 
       {tab === "compare" ? (
@@ -133,6 +151,11 @@ export default function OptimizeResultPanel({
           original={originalResume}
           optimized={result.fullOptimizedResume}
           onApplyOptimized={onApplyOptimized}
+        />
+      ) : tab === "cover-letter" && showCoverLetter ? (
+        <CoverLetterPanel
+          resume={originalResume}
+          jobDescription={jobDescription}
         />
       ) : (
         <div className="space-y-5">
