@@ -1,5 +1,5 @@
 import { HISTORY_STORAGE_KEY, MAX_HISTORY_RECORDS } from "@/lib/resume/constants";
-import type { HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
+import type { CoverLetterResult, HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
 
 function preview(text: string, max = 80): string {
   const trimmed = text.trim().replace(/\s+/g, " ");
@@ -48,6 +48,19 @@ export function saveHistoryRecord(input: {
   return record;
 }
 
+/** 将求职信附加到已有历史记录 */
+export function updateHistoryCoverLetter(
+  id: string,
+  coverLetter: CoverLetterResult,
+): HistoryRecord[] {
+  const next = loadHistory().map((record) =>
+    record.id === id ? { ...record, coverLetter } : record,
+  );
+  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
+/** 删除一条历史记录 */
 export function deleteHistoryRecord(id: string): HistoryRecord[] {
   const next = loadHistory().filter((r) => r.id !== id);
   localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));

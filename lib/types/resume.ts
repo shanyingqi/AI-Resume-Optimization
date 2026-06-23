@@ -62,4 +62,6 @@ export interface HistoryRecord {
   resume: string;
   jobDescription?: string;
   result: OptimizeResult;
+  /** 同一次优化会话中生成的求职信 */
+  coverLetter?: CoverLetterResult;
 }

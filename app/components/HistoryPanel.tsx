@@ -51,7 +51,7 @@ export default function HistoryPanel({
         <div>
           <h2 className="text-sm font-semibold">历史记录</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
-            最近 {records.length} 条优化记录，点击可恢复查看
+            最近 {records.length} 条记录，点击可恢复优化结果与求职信
           </p>
         </div>
         {records.length > 0 && (
@@ -96,6 +96,11 @@ export default function HistoryPanel({
                       <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                         {record.mode === "targeted" ? "定向优化" : "通用优化"}
                       </span>
+                      {record.coverLetter && (
+                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                          含求职信
+                        </span>
+                      )}
                     </div>
                     <p className="mt-1 truncate text-xs text-zinc-500">
                       {record.resumePreview}

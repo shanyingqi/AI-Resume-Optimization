@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppModal from "./AppModal";
 import DownloadButton from "./DownloadButton";
 import type { CoverLetterResult } from "@/lib/types/resume";
@@ -8,29 +8,44 @@ import type { CoverLetterResult } from "@/lib/types/resume";
 interface CoverLetterPanelProps {
   resume: string;
   jobDescription: string;
+  historyId?: string;
+  initialCoverLetter?: CoverLetterResult | null;
+  onSaved?: (coverLetter: CoverLetterResult) => void;
 }
 
+// 复制文本到剪贴板
 async function copyText(text: string) {
   await navigator.clipboard.writeText(text);
 }
 
+// 求职信生成面板
 export default function CoverLetterPanel({
   resume,
   jobDescription,
+  historyId,
+  initialCoverLetter,
+  onSaved,
 }: CoverLetterPanelProps) {
-  const [result, setResult] = useState<CoverLetterResult | null>(null);
+  const [result, setResult] = useState<CoverLetterResult | null>(
+    initialCoverLetter ?? null,
+  );
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errorModal, setErrorModal] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setResult(initialCoverLetter ?? null);
+  }, [historyId, initialCoverLetter]);
+
+  // 生成求职信
   async function handleGenerate() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     setLoading(true);
-    setResult(null);
 
     try {
       const res = await fetch("/api/cover-letter", {
@@ -47,6 +62,9 @@ export default function CoverLetterPanel({
       }
 
       setResult(data);
+      if (historyId) {
+        onSaved?.(data);
+      }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       setErrorModal(err instanceof Error ? err.message : "生成失败，请重试");
@@ -56,12 +74,14 @@ export default function CoverLetterPanel({
     }
   }
 
+  // 取消生成
   function handleCancel() {
     abortRef.current?.abort();
     abortRef.current = null;
     setLoading(false);
   }
 
+  // 复制全文
   async function handleCopy() {
     if (!result) return;
     await copyText(result.fullText);
@@ -74,6 +94,11 @@ export default function CoverLetterPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           基于当前简历与 JD 生成定制化求职信（Cover Letter）
+          {result && historyId && (
+            <span className="ml-2 text-xs text-emerald-600 dark:text-emerald-400">
+              已保存到历史记录
+            </span>
+          )}
         </p>
         {loading ? (
           <button

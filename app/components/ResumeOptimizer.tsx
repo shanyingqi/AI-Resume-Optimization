@@ -5,14 +5,14 @@ import HistoryPanel from "./HistoryPanel";
 import OptimizeResultPanel from "./OptimizeResultPanel";
 import ResumeUploader from "./ResumeUploader";
 import { DRAFT_STORAGE_KEY, MAX_JD_CHARS, MAX_RESUME_CHARS } from "@/lib/resume/constants";
-import { loadHistory, saveHistoryRecord } from "@/lib/resume/history";
+import { loadHistory, saveHistoryRecord, updateHistoryCoverLetter } from "@/lib/resume/history";
 import {
   consumeOptimizeStream,
   INITIAL_LOADING_STATE,
   type OptimizeLoadingState,
 } from "@/lib/resume/optimize-stream";
 import { validateOptimizeInput } from "@/lib/resume/validate";
-import type { HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
+import type { CoverLetterResult, HistoryRecord, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
 
 type InputTab = "upload" | "paste";
 
@@ -165,6 +165,14 @@ export default function ResumeOptimizer() {
 
   const charCount = resume.length;
   const jdCount = jobDescription.length;
+  const activeRecord = historyRecords.find((r) => r.id === activeHistoryId);
+  const savedCoverLetter = activeRecord?.coverLetter;
+
+  function handleCoverLetterSaved(coverLetter: CoverLetterResult) {
+    if (!activeHistoryId) return;
+    setHistoryRecords(updateHistoryCoverLetter(activeHistoryId, coverLetter));
+  }
+
   const resumeOverLimit = charCount > MAX_RESUME_CHARS;
   const jdOverLimit = mode === "targeted" && jdCount > MAX_JD_CHARS;
   const wordHint =
@@ -367,6 +375,9 @@ export default function ResumeOptimizer() {
           originalResume={resume}
           jobDescription={jobDescription}
           isTargeted={mode === "targeted"}
+          activeHistoryId={activeHistoryId}
+          savedCoverLetter={savedCoverLetter}
+          onCoverLetterSaved={handleCoverLetterSaved}
           onApplyOptimized={handleApplyOptimized}
           onCancel={handleCancel}
         />
