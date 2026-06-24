@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import AppSidebar from "./components/AppSidebar";
+import { AuthProvider } from "./components/AuthProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   description: "AI 驱动的简历分析与优化工具，支持通用优化、JD 定向匹配与简历顾问对话",
 };
 
+// 根布局
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -29,8 +30,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex h-screen overflow-hidden">
-        <AppSidebar />
-        <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</main>
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

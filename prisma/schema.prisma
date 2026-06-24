@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String?
+  avatarUrl    String?  @map("avatar_url") @db.LongText
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  historyRecords OptimizationHistory[]
+  chatSessions   ChatSession[]
+
+  @@map("users")
+}
+
+model OptimizationHistory {
+  id                    String   @id @default(uuid())
+  userId                String   @map("user_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  mode                  String
+  resumePreview         String   @map("resume_preview") @db.VarChar(500)
+  jobDescriptionPreview String?  @map("job_description_preview") @db.VarChar(500)
+  score                 Int
+  jdMatchRate           Int?     @map("jd_match_rate")
+  summary               String   @db.Text
+  resume                String   @db.LongText
+  jobDescription        String?  @map("job_description") @db.LongText
+  result                Json
+  coverLetter           Json?    @map("cover_letter")
+  resumeTemplateId      String?  @map("resume_template_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("optimization_history")
+}
+
+model ChatSession {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String   @default("新对话")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  context   Json?
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId, updatedAt])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id          String   @id @default(uuid())
+  sessionId   String   @map("session_id")
+  role        String
+  content     String   @db.LongText
+  createdAt   DateTime @default(now()) @map("created_at")
+  attachments Json?
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("chat_messages")
+}

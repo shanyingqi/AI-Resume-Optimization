@@ -7,7 +7,7 @@ import OptimizeResultPanel from "./OptimizeResultPanel";
 import ResumeUploader from "./ResumeUploader";
 import { DRAFT_CHAT_CONTEXT_KEY } from "@/lib/resume/constants";
 import { DRAFT_STORAGE_KEY, MAX_JD_CHARS, MAX_RESUME_CHARS } from "@/lib/resume/constants";
-import { loadHistory, saveHistoryRecord, updateHistoryCoverLetter, updateHistoryTemplate } from "@/lib/resume/history";
+import { fetchHistory, saveHistoryRecord, updateHistoryCoverLetter, updateHistoryTemplate } from "@/lib/resume/history";
 import {
   consumeOptimizeStream,
   INITIAL_LOADING_STATE,
@@ -50,13 +50,15 @@ export default function ResumeOptimizer() {
 
   // 初始化：加载历史记录，并尝试恢复未提交的草稿
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setHistoryRecords(loadHistory());
+    void fetchHistory()
+      .then(setHistoryRecords)
+      .catch(() => setHistoryRecords([]));
 
     try {
       const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
       if (!raw) return;
       const draft = JSON.parse(raw) as DraftData;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (draft.resume) setResume(draft.resume);
       if (draft.jobDescription) setJobDescription(draft.jobDescription);
       if (draft.mode) setMode(draft.mode);
@@ -153,13 +155,13 @@ export default function ResumeOptimizer() {
 
       setResult(data);
 
-      const record = saveHistoryRecord({
+      const record = await saveHistoryRecord({
         mode,
         resume,
         jobDescription: jobDescription || undefined,
         result: data,
       });
-      setHistoryRecords(loadHistory());
+      setHistoryRecords(await fetchHistory());
       setActiveHistoryId(record.id);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
@@ -178,14 +180,14 @@ export default function ResumeOptimizer() {
   // 保存求职信到历史记录
   function handleCoverLetterSaved(coverLetter: CoverLetterResult) {
     if (!activeHistoryId) return;
-    setHistoryRecords(updateHistoryCoverLetter(activeHistoryId, coverLetter));
+    void updateHistoryCoverLetter(activeHistoryId, coverLetter).then(setHistoryRecords);
   }
 
   // 切换简历模板
   function handleTemplateChange(templateId: ResumeTemplateId) {
     setResumeTemplateId(templateId);
     if (activeHistoryId) {
-      setHistoryRecords(updateHistoryTemplate(activeHistoryId, templateId));
+      void updateHistoryTemplate(activeHistoryId, templateId).then(setHistoryRecords);
     }
   }
 
@@ -200,7 +202,7 @@ export default function ResumeOptimizer() {
         optimizeSummary: result.summary,
       }),
     );
-    router.push("/chat");
+    router.push("/");
   }
 
   const resumeOverLimit = charCount > MAX_RESUME_CHARS;
