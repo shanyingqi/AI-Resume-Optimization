@@ -14,12 +14,12 @@ import {
 } from "@/lib/chat/attachments";
 import { consumeChatStream } from "@/lib/chat/chat-stream";
 import {
-  appendChatMessage,
+  appendMessageToSession,
   createDraftSession,
-  getChatSession,
+  fetchChatSession,
   previewChatTitle,
   saveChatSession,
-  updateLastAssistantMessage,
+  updateSessionLastAssistant,
 } from "@/lib/chat/sessions";
 import { DRAFT_CHAT_CONTEXT_KEY } from "@/lib/resume/constants";
 import type { ChatAttachment, ChatContext, ChatMessage, ChatSession } from "@/lib/types/chat";
@@ -113,6 +113,7 @@ function readDraftContext(): ChatContext | undefined {
 export default function ChatPanel({ sessionId }: ChatPanelProps) {
   const router = useRouter();
   const [session, setSession] = useState<ChatSession | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(Boolean(sessionId));
   const [persisted, setPersisted] = useState(false);
   const [input, setInput] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
@@ -140,10 +141,12 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
     activeSessionRef.current = sessionId;
 
     if (sessionId) {
-      const loaded = getChatSession(sessionId);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSession(loaded);
-      setPersisted(Boolean(loaded));
+      setSessionLoading(true);
+      void fetchChatSession(sessionId).then((loaded) => {
+        setSession(loaded);
+        setPersisted(Boolean(loaded));
+        setSessionLoading(false);
+      });
     } else {
       const context = readDraftContext();
       draftContextRef.current = context;
@@ -207,20 +210,19 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
         title: previewChatTitle(text),
         messages: [userMessage, assistantPlaceholder],
       };
-      saveChatSession(workingSession);
       setPersisted(true);
     } else {
-      const withUser =
-        appendChatMessage(session.id, userMessage) ??
-        ({ ...session, messages: [...session.messages, userMessage] } as ChatSession);
+      const withUser = appendMessageToSession(session, userMessage);
       workingSession = {
         ...withUser,
         messages: [...withUser.messages, assistantPlaceholder],
       };
-      saveChatSession(workingSession);
     }
 
     setSession(workingSession);
+    void saveChatSession(workingSession).catch(() => {
+      setError("会话保存失败，请检查网络后重试");
+    });
     setInput("");
     setPendingAttachments([]);
     setError("");
@@ -232,56 +234,53 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
       .map(flattenMessageForApi);
 
     const savedSessionId = workingSession.id;
+    let latestSession = workingSession;
 
     try {
       const reply = await consumeChatStream(
         { messages: apiMessages, context: workingSession.context },
         (partial) => {
           setStreamingContent(partial);
-          updateLastAssistantMessage(savedSessionId, partial);
+          latestSession = updateSessionLastAssistant(latestSession, partial);
+          setSession(latestSession);
         },
         controller.signal,
       );
 
-      const finalSession = updateLastAssistantMessage(savedSessionId, reply);
-      if (finalSession) setSession(finalSession);
+      latestSession = updateSessionLastAssistant(latestSession, reply);
+      setSession(latestSession);
+      await saveChatSession(latestSession);
       setStreamingContent("");
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
-        const aborted = getChatSession(savedSessionId);
-        if (aborted) {
-          const trimmed = {
-            ...aborted,
-            messages: aborted.messages.filter(
-              (m) => m.id !== assistantPlaceholder.id,
-            ),
-          };
-          if (trimmed.messages.length === 0) {
-            setSession(createDraftSession(draftContextRef.current));
-            setPersisted(false);
-            if (!sessionId) router.replace("/chat");
-          } else {
-            saveChatSession(trimmed);
-            setSession(trimmed);
-          }
-        }
-        return;
-      }
-
-      const failed = getChatSession(savedSessionId);
-      if (failed) {
         const trimmed = {
-          ...failed,
-          messages: failed.messages.filter((m) => m.id !== assistantPlaceholder.id),
+          ...latestSession,
+          messages: latestSession.messages.filter(
+            (m) => m.id !== assistantPlaceholder.id,
+          ),
         };
         if (trimmed.messages.length === 0) {
           setSession(createDraftSession(draftContextRef.current));
           setPersisted(false);
-          router.replace("/chat");
+          if (!sessionId) router.replace("/");
         } else {
-          saveChatSession(trimmed);
           setSession(trimmed);
+          void saveChatSession(trimmed);
         }
+        return;
+      }
+
+      const trimmed = {
+        ...latestSession,
+        messages: latestSession.messages.filter((m) => m.id !== assistantPlaceholder.id),
+      };
+      if (trimmed.messages.length === 0) {
+        setSession(createDraftSession(draftContextRef.current));
+        setPersisted(false);
+        router.replace("/");
+      } else {
+        setSession(trimmed);
+        void saveChatSession(trimmed);
       }
 
       setError(err instanceof Error ? err.message : "发送失败");
@@ -290,7 +289,7 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
       setLoading(false);
       abortRef.current = null;
       textareaRef.current?.focus();
-      // 首条消息发送完成后再切换路由，避免 /chat → /chat/[id] 卸载组件中断流式请求
+      // 首条消息发送完成后再切换路由，避免 / → /chat/[id] 卸载组件中断流式请求
       if (isFirstPersist && !sessionId) {
         router.replace(`/chat/${savedSessionId}`);
       }
@@ -360,9 +359,17 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
   const canSend = Boolean(input.trim() || pendingAttachments.length) && !loading && !attaching;
 
   // 没有会话时显示空状态
+  if (sessionLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-zinc-500">
+        加载会话中...
+      </div>
+    );
+  }
+
   if (!session) {
     return (
-      <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
+      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-zinc-500">
         会话不存在或已被删除
       </div>
     );
@@ -394,7 +401,7 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
       ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-zinc-950">
       {hasContext && (
         <div className="shrink-0 border-b border-zinc-100 px-4 py-2 text-xs text-emerald-700 dark:border-zinc-800 dark:text-emerald-300">
           已关联简历内容，可直接针对你的简历提问

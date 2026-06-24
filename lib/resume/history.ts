@@ -1,86 +1,65 @@
-import { HISTORY_STORAGE_KEY, MAX_HISTORY_RECORDS } from "@/lib/resume/constants";
-import type { CoverLetterResult, HistoryRecord, OptimizeMode, OptimizeResult, ResumeTemplateId } from "@/lib/types/resume";
+import { apiFetch } from "@/lib/api/client";
+import type {
+  CoverLetterResult,
+  HistoryRecord,
+  OptimizeMode,
+  OptimizeResult,
+  ResumeTemplateId,
+} from "@/lib/types/resume";
 
-function preview(text: string, max = 80): string {
-  const trimmed = text.trim().replace(/\s+/g, " ");
-  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max)}…`;
+/** 从服务端加载历史记录 */
+export async function fetchHistory(): Promise<HistoryRecord[]> {
+  const data = await apiFetch<{ records: HistoryRecord[] }>("/api/history");
+  return data.records;
 }
 
-/** 从 localStorage 读取历史记录列表 */
-export function loadHistory(): HistoryRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
-    if (!raw) return [];
-    const records = JSON.parse(raw) as HistoryRecord[];
-    return Array.isArray(records) ? records : [];
-  } catch {
-    return [];
-  }
-}
-
-/** 保存一条优化记录，超出上限时丢弃最旧的记录 */
-export function saveHistoryRecord(input: {
+/** 保存一条优化记录 */
+export async function saveHistoryRecord(input: {
   mode: OptimizeMode;
   resume: string;
   jobDescription?: string;
   result: OptimizeResult;
-}): HistoryRecord {
-  const record: HistoryRecord = {
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-    mode: input.mode,
-    resumePreview: preview(input.resume),
-    jobDescriptionPreview: input.jobDescription
-      ? preview(input.jobDescription)
-      : undefined,
-    score: input.result.score,
-    jdMatchRate: input.result.jdMatchRate,
-    summary: input.result.summary,
-    resume: input.resume,
-    jobDescription: input.jobDescription,
-    result: input.result,
-  };
-
-  const existing = loadHistory();
-  const next = [record, ...existing].slice(0, MAX_HISTORY_RECORDS);
-  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
-  return record;
+}): Promise<HistoryRecord> {
+  const data = await apiFetch<{ record: HistoryRecord }>("/api/history", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return data.record;
 }
 
 /** 将求职信附加到已有历史记录 */
-export function updateHistoryCoverLetter(
+export async function updateHistoryCoverLetter(
   id: string,
   coverLetter: CoverLetterResult,
-): HistoryRecord[] {
-  const next = loadHistory().map((record) =>
-    record.id === id ? { ...record, coverLetter } : record,
-  );
-  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
-  return next;
+): Promise<HistoryRecord[]> {
+  await apiFetch(`/api/history/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ coverLetter }),
+  });
+  return fetchHistory();
 }
 
 /** 更新历史记录中的简历模板选择 */
-export function updateHistoryTemplate(
+export async function updateHistoryTemplate(
   id: string,
   templateId: ResumeTemplateId,
-): HistoryRecord[] {
-  const next = loadHistory().map((record) =>
-    record.id === id ? { ...record, resumeTemplateId: templateId } : record,
-  );
-  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
-  return next;
+): Promise<HistoryRecord[]> {
+  await apiFetch(`/api/history/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ resumeTemplateId: templateId }),
+  });
+  return fetchHistory();
 }
 
 /** 删除一条历史记录 */
-export function deleteHistoryRecord(id: string): HistoryRecord[] {
-  const next = loadHistory().filter((r) => r.id !== id);
-  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
-  return next;
+export async function deleteHistoryRecord(id: string): Promise<HistoryRecord[]> {
+  await apiFetch(`/api/history/${id}`, { method: "DELETE" });
+  return fetchHistory();
 }
 
-export function clearHistory(): void {
-  localStorage.removeItem(HISTORY_STORAGE_KEY);
+/** 清空全部历史记录 */
+export async function clearHistory(): Promise<void> {
+  await apiFetch("/api/history", { method: "DELETE" });
 }
 
 /** 格式化为「今天 14:30」或「6/22 14:30」 */

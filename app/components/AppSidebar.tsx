@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/app/components/AuthProvider";
+import AccountSettingsModal from "@/app/components/AccountSettingsModal";
 import {
   deleteChatSession,
-  loadChatSessions,
+  fetchChatSessions,
 } from "@/lib/chat/sessions";
 import type { ChatSession } from "@/lib/types/chat";
 
@@ -71,6 +73,19 @@ function IconPanel({ className }: { className?: string }) {
   );
 }
 
+function IconSettings({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
 interface NavItemProps {
   href?: string;
   onClick?: () => void;
@@ -115,16 +130,24 @@ function NavItem({ href, onClick, icon, label, active, collapsed }: NavItemProps
 /**
  * 应用侧边栏组件：显示对话列表、简历优化入口、折叠控制。
  */
-export default function AppSidebar() {
+export default function AppSidebar({
+  externalSettingsOpen,
+  onExternalSettingsOpenChange,
+}: {
+  externalSettingsOpen?: boolean;
+  onExternalSettingsOpenChange?: (open: boolean) => void;
+} = {}) {
   const pathname = usePathname();
   const router = useRouter();
+  const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [sessionsExpanded, setSessionsExpanded] = useState(true);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [internalSettingsOpen, setInternalSettingsOpen] = useState(false);
 
   // 刷新对话列表
   const refreshSessions = useCallback(() => {
-    setSessions(loadChatSessions());
+    void fetchChatSessions().then(setSessions).catch(() => setSessions([]));
   }, []);
 
   useEffect(() => {
@@ -152,23 +175,27 @@ export default function AppSidebar() {
 
   // 新对话
   function handleNewChat() {
-    router.push("/chat");
+    router.push("/");
   }
 
   // 删除对话
   function handleDeleteSession(id: string, e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    deleteChatSession(id);
-    refreshSessions();
-    if (pathname === `/chat/${id}`) {
-      router.push("/chat");
-    }
+    void deleteChatSession(id).then(() => {
+      refreshSessions();
+      if (pathname === `/chat/${id}`) {
+        router.push("/");
+      }
+    });
   }
 
   const activeSessionId = pathname.startsWith("/chat/")
     ? pathname.split("/")[2]
     : undefined;
+
+  const settingsOpen = externalSettingsOpen ?? internalSettingsOpen;
+  const setSettingsOpen = onExternalSettingsOpenChange ?? setInternalSettingsOpen;
 
   return (
     <aside
@@ -182,7 +209,7 @@ export default function AppSidebar() {
             type="button"
             onClick={handleNewChat}
             className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white transition ${
-              pathname === "/chat"
+              pathname === "/"
                 ? "bg-emerald-700 ring-2 ring-emerald-300 dark:ring-emerald-800"
                 : "bg-emerald-600 hover:bg-emerald-700"
             }`}
@@ -191,14 +218,19 @@ export default function AppSidebar() {
             单
           </button>
         ) : (
-          <Link href="/" className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleNewChat}
+            className="flex items-center gap-2.5 rounded-lg transition hover:opacity-90"
+            title="新对话"
+          >
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-sm font-bold text-white">
               单
             </span>
             <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
               小单 AI
             </span>
-          </Link>
+          </button>
         )}
         <button
           type="button"
@@ -215,14 +247,14 @@ export default function AppSidebar() {
           onClick={handleNewChat}
           icon={<IconCompose className="h-5 w-5" />}
           label="新对话"
-          active={pathname === "/chat"}
+          active={pathname === "/"}
           collapsed={collapsed}
         />
         <NavItem
-          href="/"
+          href="/resume"
           icon={<IconResume className="h-5 w-5" />}
           label="简历优化"
-          active={pathname === "/"}
+          active={pathname === "/resume"}
           collapsed={collapsed}
         />
       </nav>
@@ -274,6 +306,27 @@ export default function AppSidebar() {
           )}
         </div>
       )}
+
+      {!collapsed && user && (
+        <div className="shrink-0 border-t border-zinc-100 px-3 py-3 dark:border-zinc-800">
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-500 transition hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+              title="设置"
+            >
+              <IconSettings className="h-3.5 w-3.5" />
+              设置
+            </button>
+          </div>
+        </div>
+      )}
+
+      <AccountSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </aside>
   );
 }

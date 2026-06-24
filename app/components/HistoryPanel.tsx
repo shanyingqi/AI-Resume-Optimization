@@ -29,7 +29,7 @@ export default function HistoryPanel({
   // 删除历史记录
   function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    onRecordsChange(deleteHistoryRecord(id));
+    void deleteHistoryRecord(id).then(onRecordsChange);
   }
 
   // 清空全部历史记录
@@ -40,9 +40,10 @@ export default function HistoryPanel({
 
   // 确认清空全部历史记录
   function confirmClear() {
-    clearHistory();
-    onRecordsChange([]);
-    setClearConfirmOpen(false);
+    void clearHistory().then(() => {
+      onRecordsChange([]);
+      setClearConfirmOpen(false);
+    });
   }
 
   return (

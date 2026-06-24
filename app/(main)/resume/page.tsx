@@ -1,6 +1,7 @@
-import ResumeOptimizer from "./components/ResumeOptimizer";
+import ResumeOptimizer from "@/app/components/ResumeOptimizer";
 
-export default function Home() {
+// 简历优化页面
+export default function ResumePage() {
   return (
     <div className="h-full overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
       <ResumeOptimizer />
