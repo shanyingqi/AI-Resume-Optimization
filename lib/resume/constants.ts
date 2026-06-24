@@ -30,3 +30,38 @@ export const HISTORY_STORAGE_KEY = "xiaodan-resume-history";
 
 /** 最多保留的历史记录条数 */
 export const MAX_HISTORY_RECORDS = 20;
+
+/** 聊天会话 localStorage 键名 */
+export const CHAT_STORAGE_KEY = "xiaodan-chat-sessions";
+
+/** 最多保留的聊天会话数 */
+export const MAX_CHAT_SESSIONS = 30;
+
+/** 单条聊天消息字数上限 */
+export const MAX_CHAT_MESSAGE_CHARS = 4_000;
+
+/** 单个会话最多消息条数 */
+export const MAX_CHAT_MESSAGES = 50;
+
+/** 聊天接口：每 IP 每小时最大请求次数 */
+export const CHAT_RATE_LIMIT = 30;
+
+/** 从简历优化页带入对话的上下文（sessionStorage） */
+export const DRAFT_CHAT_CONTEXT_KEY = "xiaodan-chat-draft-context";
+
+/** 聊天图片允许的 MIME 类型 */
+export const ACCEPTED_CHAT_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+];
+
+/** 聊天附件允许的扩展名 */
+export const ACCEPTED_CHAT_FILE_EXTENSIONS = [".pdf", ".docx", ".txt", ".md"];
+
+/** 单张聊天图片大小上限 */
+export const MAX_CHAT_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+
+/** 单条消息最多附件数 */
+export const MAX_CHAT_ATTACHMENTS = 5;

@@ -1,4 +1,6 @@
 import type { CoverLetterResult, OptimizeMode, OptimizeResult } from "@/lib/types/resume";
+import type { ChatMessageInput } from "@/lib/types/chat";
+import { buildApiMessageContent } from "@/lib/chat/attachments";
 import { normalizeStructuredResume } from "@/lib/resume/structured-resume";
 
 /** OpenAI 兼容 API 默认地址，可通过 OPENAI_BASE_URL 覆盖（如 DeepSeek） */
@@ -184,6 +186,104 @@ export async function callCoverLetterAI(
     fullText: raw.fullText.trim(),
     highlights: raw.highlights ?? [],
   };
+}
+
+/** 流式多轮简历顾问对话 */
+export async function callResumeChatStream(
+  systemPrompt: string,
+  messages: ChatMessageInput[],
+  onDelta: (fullContent: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const { apiKey, baseUrl, model } = getAIConfig();
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.6,
+      stream: true,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages.map((m) => {
+          const hasImages = m.attachments?.some(
+            (a) => a.kind === "image" && a.dataUrl,
+          );
+          if (!hasImages) {
+            return { role: m.role, content: m.content };
+          }
+          return {
+            role: m.role,
+            content: buildApiMessageContent(m.content, m.attachments),
+          };
+        }),
+      ],
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(parseAIError(response.status, errorText));
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("无法读取 AI 响应流");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullContent = "";
+
+  while (true) {
+    if (signal?.aborted) {
+      await reader.cancel();
+      throw new DOMException("请求已取消", "AbortError");
+    }
+
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) continue;
+
+      const payload = trimmed.slice(6);
+      if (payload === "[DONE]") continue;
+
+      try {
+        const parsed = JSON.parse(payload) as {
+          choices?: Array<{
+            delta?: { content?: string; reasoning_content?: string };
+          }>;
+        };
+        const delta =
+          parsed.choices?.[0]?.delta?.content ??
+          parsed.choices?.[0]?.delta?.reasoning_content;
+        if (delta) {
+          fullContent += delta;
+          onDelta(fullContent);
+        }
+      } catch {
+        // 忽略无法解析的 SSE 片段
+      }
+    }
+  }
+
+  if (!fullContent.trim()) {
+    throw new Error("AI 返回内容为空");
+  }
+
+  return fullContent;
 }
 
 /** 补全 AI 可能缺失的字段，定向模式下保留 JD 匹配相关字段 */
