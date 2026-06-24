@@ -32,6 +32,7 @@ interface OptimizeResultPanelProps {
   onCoverLetterSaved?: (coverLetter: CoverLetterResult) => void;
   onApplyOptimized?: (optimized: string) => void;
   onCancel?: () => void;
+  onStartChat?: () => void;
 }
 
 // 复制文本到剪贴板
@@ -88,6 +89,7 @@ export default function OptimizeResultPanel({
   onCoverLetterSaved,
   onApplyOptimized,
   onCancel,
+  onStartChat,
 }: OptimizeResultPanelProps) {
   const [copied, setCopied] = useState("");
   const [tab, setTab] = useState<ResultTab>("analysis");
@@ -226,7 +228,16 @@ export default function OptimizeResultPanel({
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {onStartChat && (
+                <button
+                  type="button"
+                  onClick={onStartChat}
+                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+                >
+                  继续 AI 对话
+                </button>
+              )}
               <DownloadButton
                 content={formatOptimizeReport(result)}
                 filenamePrefix="简历优化报告"

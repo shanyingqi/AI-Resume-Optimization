@@ -1,9 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import HistoryPanel from "./HistoryPanel";
 import OptimizeResultPanel from "./OptimizeResultPanel";
 import ResumeUploader from "./ResumeUploader";
+import { DRAFT_CHAT_CONTEXT_KEY } from "@/lib/resume/constants";
 import { DRAFT_STORAGE_KEY, MAX_JD_CHARS, MAX_RESUME_CHARS } from "@/lib/resume/constants";
 import { loadHistory, saveHistoryRecord, updateHistoryCoverLetter, updateHistoryTemplate } from "@/lib/resume/history";
 import {
@@ -28,6 +30,7 @@ interface DraftData {
  * 简历优化主页面：输入简历 → 调用 API → 展示分析结果，并管理草稿与历史。
  */
 export default function ResumeOptimizer() {
+  const router = useRouter();
   const [resume, setResume] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [mode, setMode] = useState<OptimizeMode>("general");
@@ -184,6 +187,20 @@ export default function ResumeOptimizer() {
     if (activeHistoryId) {
       setHistoryRecords(updateHistoryTemplate(activeHistoryId, templateId));
     }
+  }
+
+  // 携带当前简历上下文进入 AI 对话
+  function handleStartChat() {
+    if (!result) return;
+    sessionStorage.setItem(
+      DRAFT_CHAT_CONTEXT_KEY,
+      JSON.stringify({
+        resume,
+        jobDescription: jobDescription || undefined,
+        optimizeSummary: result.summary,
+      }),
+    );
+    router.push("/chat");
   }
 
   const resumeOverLimit = charCount > MAX_RESUME_CHARS;
@@ -395,6 +412,7 @@ export default function ResumeOptimizer() {
           onCoverLetterSaved={handleCoverLetterSaved}
           onApplyOptimized={handleApplyOptimized}
           onCancel={handleCancel}
+          onStartChat={result ? handleStartChat : undefined}
         />
       </form>
 
