@@ -1,16 +1,12 @@
 import { callResumeChatStream } from "@/lib/ai/client";
 import type { ChatStreamEvent } from "@/lib/ai/chat-stream-events";
 import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitResponse,
-} from "@/lib/api/rate-limit";
+  enforceRateLimit,
+  trackUsage,
+} from "@/lib/api/request-limit";
 import { validateChatInput } from "@/lib/chat/validate";
 import { buildChatSystemPrompt } from "@/lib/prompts/chat-resume";
-import {
-  CHAT_RATE_LIMIT,
-  RATE_LIMIT_WINDOW_MS,
-} from "@/lib/resume/constants";
+import { CHAT_RATE_LIMIT } from "@/lib/resume/constants";
 import type { ChatRequest } from "@/lib/types/chat";
 
 function sseEncode(event: ChatStreamEvent): Uint8Array {
@@ -19,15 +15,8 @@ function sseEncode(event: ChatStreamEvent): Uint8Array {
 
 /** 简历顾问多轮对话接口（SSE 流式） */
 export async function POST(request: Request) {
-  const ip = getClientIp(request);
-  const rate = checkRateLimit(
-    `chat:${ip}`,
-    CHAT_RATE_LIMIT,
-    RATE_LIMIT_WINDOW_MS,
-  );
-  if (!rate.allowed) {
-    return rateLimitResponse(rate.retryAfterSec);
-  }
+  const limited = await enforceRateLimit(request, "chat", CHAT_RATE_LIMIT);
+  if (limited) return limited;
 
   let body: ChatRequest;
 
@@ -53,6 +42,8 @@ export async function POST(request: Request) {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      void trackUsage(request, "chat");
+
       const send = (event: ChatStreamEvent) => {
         if (request.signal.aborted) return;
         controller.enqueue(sseEncode(event));

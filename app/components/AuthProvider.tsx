@@ -6,10 +6,17 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api/client";
+import {
+  clearCachedProfile,
+  loadCachedProfile,
+  mergeUserWithCache,
+  saveCachedProfile,
+} from "@/lib/auth/profile-cache";
 import { migrateLocalDataToServer } from "@/lib/auth/migrate-local-data";
 
 export interface AuthUser {
@@ -17,105 +24,202 @@ export interface AuthUser {
   email: string;
   name: string | null;
   avatarUrl?: string | null;
+  onboardingCompleted?: boolean;
   createdAt: string;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
+  /** 是否已从数据库加载完整用户资料（引导弹窗需等此标志为 true） */
+  profileReady: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateProfile: (input: { name?: string | null; avatarUrl?: string | null }) => Promise<void>;
+  updateProfile: (input: {
+    name?: string | null;
+    avatarUrl?: string | null;
+    onboardingCompleted?: boolean;
+  }) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const PUBLIC_AUTH_PATHS = ["/login", "/forgot-password", "/reset-password"];
+
+function isPublicAuthPath(pathname: string): boolean {
+  return PUBLIC_AUTH_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
 // 认证提供者
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const publicAuth = isPublicAuthPath(pathname);
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
+  const refreshPromiseRef = useRef<Promise<void> | null>(null);
 
-  // 刷新用户信息
-  const refresh = useCallback(async () => {
-    try {
-      const data = await apiFetch<{ user: AuthUser }>("/api/auth/me");
-      setUser({
-        ...data.user,
-        createdAt:
-          typeof data.user.createdAt === "string"
-            ? data.user.createdAt
-            : new Date(data.user.createdAt).toISOString(),
-      });
-    } catch {
-      setUser(null);
-    }
+  function normalizeUser(data: AuthUser): AuthUser {
+    return {
+      ...data,
+      createdAt:
+        typeof data.createdAt === "string"
+          ? data.createdAt
+          : new Date(data.createdAt).toISOString(),
+    };
+  }
+
+  const applyUser = useCallback((data: AuthUser, persist = true) => {
+    const next = normalizeUser(data);
+    setUser(next);
+    if (persist) saveCachedProfile(next);
+    return next;
   }, []);
 
-  // 初始化用户信息
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refresh().finally(() => setLoading(false));
-  }, [refresh]);
+  // 刷新用户信息（合并并发请求，避免开发模式重复调用导致误登出）
+  const refresh = useCallback(async () => {
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
+    }
 
-  // 登录
-  const login = useCallback(
-    async (email: string, password: string) => {
-      await apiFetch("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-      await migrateLocalDataToServer();
-      await refresh();
-    },
-    [refresh],
-  );
+    const task = (async () => {
+      try {
+        const data = await apiFetch<{ user: AuthUser }>("/api/auth/me");
+        applyUser(data.user);
+        setProfileReady(true);
+      } catch {
+        setUser(null);
+        setProfileReady(false);
+        clearCachedProfile();
+        try {
+          await apiFetch("/api/auth/logout", { method: "POST" });
+        } catch {
+          // ignore
+        }
+      }
+    })().finally(() => {
+      refreshPromiseRef.current = null;
+    });
+
+    refreshPromiseRef.current = task;
+    return task;
+  }, [applyUser]);
+
+  // 先用 JWT 快速恢复会话，再后台拉取完整资料
+  const bootstrapSession = useCallback(async () => {
+    try {
+      const data = await apiFetch<{ user: AuthUser }>("/api/auth/session");
+      const merged = mergeUserWithCache(normalizeUser(data.user));
+      setUser(merged);
+      setSessionReady(true);
+      const hasCachedProfile = loadCachedProfile(merged.id) !== null;
+      setProfileReady(hasCachedProfile);
+      void apiFetch<{ user: AuthUser }>("/api/auth/me")
+        .then((full) => {
+          applyUser(full.user);
+          setProfileReady(true);
+        })
+        .catch(() => {
+          // 数据库慢或不可用时保留 JWT 会话与本地缓存资料
+          if (hasCachedProfile) {
+            setProfileReady(true);
+          }
+        });
+    } catch {
+      setUser(null);
+      setSessionReady(true);
+      setProfileReady(false);
+      clearCachedProfile();
+      try {
+        await apiFetch("/api/auth/logout", { method: "POST" });
+      } catch {
+        // ignore
+      }
+    }
+  }, [applyUser]);
+
+  // 初始化用户信息（登录/找回密码页不请求会话，避免远程数据库拖慢首屏）
+  useEffect(() => {
+    if (publicAuth || user) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void bootstrapSession();
+  }, [bootstrapSession, pathname, user, publicAuth]);
+
+  const loading = !publicAuth && !user && !sessionReady;
+
+  // 登录（直接使用接口返回的用户信息，避免再请求 /api/auth/me）
+  const login = useCallback(async (email: string, password: string) => {
+    const data = await apiFetch<{ user: AuthUser }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    applyUser(data.user);
+    setProfileReady(true);
+    void migrateLocalDataToServer();
+  }, [applyUser]);
 
   // 注册
   const register = useCallback(
     async (email: string, password: string, name?: string) => {
-      await apiFetch("/api/auth/register", {
+      const data = await apiFetch<{ user: AuthUser }>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({ email, password, name }),
       });
-      await migrateLocalDataToServer();
-      await refresh();
+      applyUser(data.user);
+      setProfileReady(true);
+      void migrateLocalDataToServer();
     },
-    [refresh],
+    [applyUser],
   );
 
   // 退出登录
   const logout = useCallback(async () => {
     await apiFetch("/api/auth/logout", { method: "POST" });
     setUser(null);
+    setProfileReady(false);
+    clearCachedProfile();
   }, []);
 
   // 更新用户信息
   const updateProfile = useCallback(
-    async (input: { name?: string | null; avatarUrl?: string | null }) => {
+    async (input: {
+      name?: string | null;
+      avatarUrl?: string | null;
+      onboardingCompleted?: boolean;
+    }) => {
       const data = await apiFetch<{ user: AuthUser }>("/api/auth/me", {
         method: "PATCH",
         body: JSON.stringify(input),
       });
-      setUser({
-        ...data.user,
-        createdAt:
-          typeof data.user.createdAt === "string"
-            ? data.user.createdAt
-            : new Date(data.user.createdAt).toISOString(),
-      });
+      applyUser(data.user);
     },
-    [],
+    [applyUser],
   );
 
   // 认证上下文值
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, updateProfile, refresh }),
-    [user, loading, login, register, logout, updateProfile, refresh],
+    () => ({
+      user,
+      loading,
+      profileReady,
+      login,
+      register,
+      logout,
+      updateProfile,
+      refresh,
+    }),
+    [user, loading, profileReady, login, register, logout, updateProfile, refresh],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      <div className="flex min-h-0 w-full flex-1 flex-col">{children}</div>
+    </AuthContext.Provider>
+  );
 }
 
 // 使用认证
@@ -142,17 +246,21 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // 如果正在加载，则显示加载中
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+      <div className="flex min-h-screen w-full flex-1 items-center justify-center text-sm text-zinc-500">
         加载中...
       </div>
     );
   }
 
   if (!user) {
-    return null;
+    return (
+      <div className="flex min-h-screen w-full flex-1 items-center justify-center text-sm text-zinc-500">
+        正在跳转到登录页...
+      </div>
+    );
   }
 
-  return <>{children}</>;
+  return <div className="flex h-full min-h-0 w-full flex-1">{children}</div>;
 }
 
 export { ApiError };

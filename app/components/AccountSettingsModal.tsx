@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, useAuth } from "@/app/components/AuthProvider";
+import { fetchUsage } from "@/lib/projects/applications";
+import type { UsageSummary } from "@/lib/types/project";
 
 const MAX_AVATAR_BYTES = 1024 * 1024; // 1MB
 
@@ -29,8 +32,14 @@ export default function AccountSettingsModal({
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
 
   const email = user?.email ?? "";
+
+  useEffect(() => {
+    if (!open) return;
+    void fetchUsage().then(setUsage).catch(() => setUsage(null));
+  }, [open]);
 
   // 打开弹窗时设置用户名和头像
   useEffect(() => {
@@ -221,6 +230,31 @@ export default function AccountSettingsModal({
             <p className="text-xs text-zinc-400 dark:text-zinc-500">
               当前仅支持修改用户名；邮箱暂不支持更改。
             </p>
+
+            {usage && (
+              <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
+                <p className="mb-2 font-medium text-zinc-700 dark:text-zinc-200">
+                  本月用量
+                </p>
+                <ul className="space-y-1 text-zinc-500">
+                  <li>
+                    简历优化 {usage.optimize.used}/{usage.optimize.limit}
+                  </li>
+                  <li>
+                    AI 对话 {usage.chat.used}/{usage.chat.limit}
+                  </li>
+                  <li>
+                    文件解析 {usage.parse.used}/{usage.parse.limit}
+                  </li>
+                  <li>
+                    求职信 {usage.coverLetter.used}/{usage.coverLetter.limit}
+                  </li>
+                  <li>
+                    历史记录 {usage.history.used}/{usage.history.limit}
+                  </li>
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/db/prisma";
 import { getSessionFromRequest } from "@/lib/auth/session";
 
 // 认证错误
@@ -12,23 +11,19 @@ export class AuthError extends Error {
   }
 }
 
-// 需要用户认证
+// 需要用户认证（仅验证 JWT，避免每个 API 都查远程数据库）
 export async function requireUser(request: Request) {
   const session = await getSessionFromRequest(request);
   if (!session) {
     throw new AuthError("未登录或会话已过期");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { id: true, email: true, name: true, createdAt: true },
-  });
-
-  if (!user) {
-    throw new AuthError("用户不存在");
-  }
-
-  return user;
+  return {
+    id: session.userId,
+    email: session.email,
+    name: null as string | null,
+    createdAt: new Date(0),
+  };
 }
 
 // 认证错误响应

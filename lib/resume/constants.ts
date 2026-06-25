@@ -28,8 +28,20 @@ export const DRAFT_STORAGE_KEY = "xiaodan-resume-draft";
 /** 历史记录的 localStorage 键名 */
 export const HISTORY_STORAGE_KEY = "xiaodan-resume-history";
 
-/** 最多保留的历史记录条数 */
-export const MAX_HISTORY_RECORDS = 20;
+/** 最多保留的历史记录条数（软删除不计入展示上限） */
+export const MAX_HISTORY_RECORDS = 50;
+
+/** 用户每月优化次数上限 */
+export const MONTHLY_OPTIMIZE_LIMIT = 30;
+
+/** 用户每月对话请求上限 */
+export const MONTHLY_CHAT_LIMIT = 100;
+
+/** 用户每月文件解析上限 */
+export const MONTHLY_PARSE_LIMIT = 60;
+
+/** 用户每月求职信生成上限 */
+export const MONTHLY_COVER_LETTER_LIMIT = 20;
 
 /** 聊天会话 localStorage 键名 */
 export const CHAT_STORAGE_KEY = "xiaodan-chat-sessions";
@@ -46,8 +58,11 @@ export const MAX_CHAT_MESSAGES = 50;
 /** 聊天接口：每 IP 每小时最大请求次数 */
 export const CHAT_RATE_LIMIT = 30;
 
-/** 从简历优化页带入对话的上下文（sessionStorage） */
+/** 从简历优化页带入对话的上下文（sessionStorage，兼容旧流程） */
 export const DRAFT_CHAT_CONTEXT_KEY = "xiaodan-chat-draft-context";
+
+/** 从其他页面跳转优化的草稿参数 */
+export const DRAFT_OPTIMIZE_KEY = "xiaodan-optimize-draft";
 
 /** 聊天图片允许的 MIME 类型 */
 export const ACCEPTED_CHAT_IMAGE_TYPES = [

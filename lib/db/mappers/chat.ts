@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatSession } from "@prisma/client";
+import { sortChatMessages } from "@/lib/chat/message-order";
 import type {
   ChatAttachment,
   ChatContext,
@@ -28,8 +29,10 @@ export function toChatSession(row: SessionWithMessages): ChatSessionType {
     title: row.title,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    messages: row.messages.map(toChatMessage),
+    messages: sortChatMessages(row.messages.map(toChatMessage)),
     context: row.context ? (row.context as unknown as ChatContext) : undefined,
+    historyId: row.historyId ?? undefined,
+    projectId: row.projectId ?? undefined,
   };
 }
 
@@ -42,7 +45,9 @@ export function toChatSessionSummary(
     title: row.title,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    messages: row.messages?.map(toChatMessage) ?? [],
+    messages: sortChatMessages(row.messages?.map(toChatMessage) ?? []),
     context: row.context ? (row.context as unknown as ChatContext) : undefined,
+    historyId: row.historyId ?? undefined,
+    projectId: row.projectId ?? undefined,
   };
 }

@@ -8,39 +8,102 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  name         String?
-  avatarUrl    String?  @map("avatar_url") @db.LongText
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  passwordHash         String    @map("password_hash")
+  name                 String?
+  avatarUrl            String?   @map("avatar_url") @db.LongText
+  onboardingCompleted  Boolean   @default(false) @map("onboarding_completed")
+  passwordResetToken   String?   @map("password_reset_token")
+  passwordResetExpires DateTime? @map("password_reset_expires")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
-  historyRecords OptimizationHistory[]
-  chatSessions   ChatSession[]
+  resumeProfile   ResumeProfile?
+  resumeVersions  ResumeVersion[]
+  jobApplications JobApplication[]
+  historyRecords  OptimizationHistory[]
+  chatSessions    ChatSession[]
+  usageEvents     UsageEvent[]
 
   @@map("users")
 }
 
-model OptimizationHistory {
-  id                    String   @id @default(uuid())
-  userId                String   @map("user_id")
-  createdAt             DateTime @default(now()) @map("created_at")
-  mode                  String
-  resumePreview         String   @map("resume_preview") @db.VarChar(500)
-  jobDescriptionPreview String?  @map("job_description_preview") @db.VarChar(500)
-  score                 Int
-  jdMatchRate           Int?     @map("jd_match_rate")
-  summary               String   @db.Text
-  resume                String   @db.LongText
-  jobDescription        String?  @map("job_description") @db.LongText
-  result                Json
-  coverLetter           Json?    @map("cover_letter")
-  resumeTemplateId      String?  @map("resume_template_id")
+model ResumeProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  title     String   @default("我的主简历")
+  content   String   @db.LongText
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@map("resume_profiles")
+}
+
+model ResumeVersion {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  content   String   @db.LongText
+  source    String   @default("manual")
+  historyId String?  @unique @map("history_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  history OptimizationHistory? @relation(fields: [historyId], references: [id], onDelete: SetNull)
+
   @@index([userId, createdAt])
+  @@map("resume_versions")
+}
+
+model JobApplication {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  title           String
+  company         String?
+  jobDescription  String?  @map("job_description") @db.LongText
+  status          String   @default("active")
+  resumeVersionId String?  @map("resume_version_id")
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  historyRecords OptimizationHistory[]
+  chatSessions   ChatSession[]
+
+  @@index([userId, updatedAt])
+  @@map("job_applications")
+}
+
+model OptimizationHistory {
+  id                    String    @id @default(uuid())
+  userId                String    @map("user_id")
+  title                 String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  deletedAt             DateTime? @map("deleted_at")
+  mode                  String
+  resumePreview         String    @map("resume_preview") @db.VarChar(500)
+  jobDescriptionPreview String?   @map("job_description_preview") @db.VarChar(500)
+  score                 Int
+  jdMatchRate           Int?      @map("jd_match_rate")
+  summary               String    @db.Text
+  resume                String    @db.LongText
+  jobDescription        String?   @map("job_description") @db.LongText
+  result                Json
+  coverLetter           Json?     @map("cover_letter")
+  resumeTemplateId      String?   @map("resume_template_id")
+  projectId             String?   @map("project_id")
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       JobApplication? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  resumeVersion ResumeVersion?
+
+  @@index([userId, createdAt])
+  @@index([userId, deletedAt])
+  @@index([projectId])
   @@map("optimization_history")
 }
 
@@ -51,11 +114,15 @@ model ChatSession {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   context   Json?
+  historyId String?  @map("history_id")
+  projectId String?  @map("project_id")
 
-  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  JobApplication? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   messages ChatMessage[]
 
   @@index([userId, updatedAt])
+  @@index([projectId])
   @@map("chat_sessions")
 }
 
@@ -71,4 +138,16 @@ model ChatMessage {
 
   @@index([sessionId, createdAt])
   @@map("chat_messages")
+}
+
+model UsageEvent {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  action    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, action, createdAt])
+  @@map("usage_events")
 }

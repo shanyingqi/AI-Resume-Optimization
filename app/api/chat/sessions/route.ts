@@ -63,6 +63,8 @@ export async function POST(request: Request) {
         data: {
           title: session.title,
           context: contextValue,
+          historyId: session.historyId ?? null,
+          projectId: session.projectId ?? null,
           messages: {
             create: session.messages.map((msg) => ({
               id: msg.id,
@@ -88,6 +90,8 @@ export async function POST(request: Request) {
         userId: user.id,
         title: session.title,
         context: contextValue,
+        historyId: session.historyId ?? null,
+        projectId: session.projectId ?? null,
         createdAt: new Date(session.createdAt),
         updatedAt: new Date(session.updatedAt),
         messages: {

@@ -9,6 +9,7 @@ import {
   deleteChatSession,
   fetchChatSessions,
 } from "@/lib/chat/sessions";
+import { resetDraftChatState } from "@/lib/resume/draft-chat";
 import type { ChatSession } from "@/lib/types/chat";
 
 const SIDEBAR_COLLAPSED_KEY = "xiaodan-sidebar-collapsed";
@@ -42,6 +43,22 @@ function IconHistory({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function IconMasterResume({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  );
+}
+
+function IconProjects({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
     </svg>
   );
 }
@@ -175,6 +192,7 @@ export default function AppSidebar({
 
   // 新对话
   function handleNewChat() {
+    resetDraftChatState();
     router.push("/");
   }
 
@@ -257,6 +275,20 @@ export default function AppSidebar({
           active={pathname === "/resume"}
           collapsed={collapsed}
         />
+        <NavItem
+          href="/master-resume"
+          icon={<IconMasterResume className="h-5 w-5" />}
+          label="主简历"
+          active={pathname === "/master-resume"}
+          collapsed={collapsed}
+        />
+        <NavItem
+          href="/projects"
+          icon={<IconProjects className="h-5 w-5" />}
+          label="求职项目"
+          active={pathname.startsWith("/projects")}
+          collapsed={collapsed}
+        />
       </nav>
 
       {!collapsed && (
@@ -288,7 +320,9 @@ export default function AppSidebar({
                         }`}
                       >
                         <IconHistory className="h-4 w-4 shrink-0 opacity-60" />
-                        <span className="min-w-0 flex-1 truncate">{session.title}</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {session.context?.projectTitle || session.title}
+                        </span>
                         <button
                           type="button"
                           onClick={(e) => handleDeleteSession(session.id, e)}

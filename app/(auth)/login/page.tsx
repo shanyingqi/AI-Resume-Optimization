@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, useAuth } from "@/app/components/AuthProvider";
@@ -16,8 +17,17 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
+  const [success, setSuccess] = useState("");
 
-  // 如果用户已登录，则重定向到主页
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reset") === "1") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSuccess(
+        params.get("message") || "密码已重置，请使用新密码登录",
+      );
+    }
+  }, []);
   useEffect(() => {
     if (!loading && user) {
       router.replace("/");
@@ -177,14 +187,19 @@ export default function LoginPage() {
                   />
                   记住我
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setError("暂未实现找回密码（可先重新注册或联系管理员）")}
+                <Link
+                  href="/forgot-password"
                   className="text-sm text-zinc-500 transition hover:text-emerald-600 dark:text-zinc-400 dark:hover:text-emerald-300"
                 >
                   忘记密码？
-                </button>
+                </Link>
               </div>
+            )}
+
+            {success && (
+              <p className="rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                {success}
+              </p>
             )}
 
             {error && (

@@ -7,11 +7,16 @@ import type {
   ResumeTemplateId,
 } from "@/lib/types/resume";
 
+type HistoryRow = OptimizationHistory & {
+  project?: { title: string; company: string | null } | null;
+};
+
 // 将数据库历史记录映射为历史记录
-export function toHistoryRecord(row: OptimizationHistory): HistoryRecord {
+export function toHistoryRecord(row: HistoryRow): HistoryRecord {
   return {
     id: row.id,
     createdAt: row.createdAt.toISOString(),
+    title: row.title ?? undefined,
     mode: row.mode as OptimizeMode,
     resumePreview: row.resumePreview,
     jobDescriptionPreview: row.jobDescriptionPreview ?? undefined,
@@ -26,6 +31,12 @@ export function toHistoryRecord(row: OptimizationHistory): HistoryRecord {
       : undefined,
     resumeTemplateId: row.resumeTemplateId
       ? (row.resumeTemplateId as ResumeTemplateId)
+      : undefined,
+    projectId: row.projectId ?? undefined,
+    projectTitle: row.project
+      ? row.project.company
+        ? `${row.project.company} · ${row.project.title}`
+        : row.project.title
       : undefined,
   };
 }

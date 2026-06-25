@@ -28,12 +28,18 @@ export function validateOptimizeInput(
   resume: string,
   jobDescription: string | undefined,
   mode: OptimizeMode,
+  projectId?: string,
 ): string | null {
   const resumeError = validateResumeLength(resume);
   if (resumeError) return resumeError;
 
-  if (mode === "targeted" && !jobDescription?.trim()) {
-    return "定向优化模式下请提供岗位 JD";
+  if (mode === "targeted") {
+    if (!projectId) {
+      return "JD 定向优化需先选择求职项目";
+    }
+    if (!jobDescription?.trim()) {
+      return "所选求职项目缺少岗位 JD，请先在项目中补充";
+    }
   }
 
   return validateJobDescriptionLength(jobDescription);

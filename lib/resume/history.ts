@@ -8,8 +8,17 @@ import type {
 } from "@/lib/types/resume";
 
 /** 从服务端加载历史记录 */
-export async function fetchHistory(): Promise<HistoryRecord[]> {
-  const data = await apiFetch<{ records: HistoryRecord[] }>("/api/history");
+export async function fetchHistory(input?: {
+  q?: string;
+  projectId?: string;
+}): Promise<HistoryRecord[]> {
+  const params = new URLSearchParams();
+  if (input?.q) params.set("q", input.q);
+  if (input?.projectId) params.set("projectId", input.projectId);
+  const query = params.toString();
+  const data = await apiFetch<{ records: HistoryRecord[] }>(
+    `/api/history${query ? `?${query}` : ""}`,
+  );
   return data.records;
 }
 
@@ -19,6 +28,10 @@ export async function saveHistoryRecord(input: {
   resume: string;
   jobDescription?: string;
   result: OptimizeResult;
+  title?: string;
+  projectId?: string;
+  company?: string;
+  jobTitle?: string;
 }): Promise<HistoryRecord> {
   const data = await apiFetch<{ record: HistoryRecord }>("/api/history", {
     method: "POST",
@@ -47,6 +60,18 @@ export async function updateHistoryTemplate(
   await apiFetch(`/api/history/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ resumeTemplateId: templateId }),
+  });
+  return fetchHistory();
+}
+
+/** 更新历史记录标题或关联项目 */
+export async function updateHistoryMeta(
+  id: string,
+  input: { title?: string; projectId?: string | null },
+): Promise<HistoryRecord[]> {
+  await apiFetch(`/api/history/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
   });
   return fetchHistory();
 }

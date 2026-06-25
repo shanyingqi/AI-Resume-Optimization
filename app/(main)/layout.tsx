@@ -1,6 +1,7 @@
 "use client";
 
 import AppSidebar from "@/app/components/AppSidebar";
+import OnboardingModal from "@/app/components/OnboardingModal";
 import { AuthGuard } from "@/app/components/AuthProvider";
 import UserMenu from "@/app/components/UserMenu";
 import { useState } from "react";
@@ -21,6 +22,7 @@ export default function MainLayout({
       />
       <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <UserMenu onOpenSettings={() => setSettingsOpen(true)} />
+        <OnboardingModal />
         {children}
       </main>
     </AuthGuard>

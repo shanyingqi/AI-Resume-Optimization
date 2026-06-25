@@ -9,7 +9,7 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-/** 更新历史记录（求职信、模板等） */
+/** 更新历史记录 */
 export async function PATCH(request: Request, context: RouteContext) {
   try {
     const user = await requireUser(request);
@@ -18,6 +18,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     let body: {
       coverLetter?: CoverLetterResult;
       resumeTemplateId?: ResumeTemplateId;
+      title?: string;
+      projectId?: string | null;
     };
 
     try {
@@ -31,10 +33,22 @@ export async function PATCH(request: Request, context: RouteContext) {
         : undefined;
 
     const existing = await prisma.optimizationHistory.findFirst({
-      where: { id, userId: user.id },
+      where: { id, userId: user.id, deletedAt: null },
     });
     if (!existing) {
       return errorResponse("记录不存在", 404);
+    }
+
+    let projectId: string | null | undefined = undefined;
+    if (body.projectId !== undefined) {
+      if (body.projectId === null) {
+        projectId = null;
+      } else {
+        const project = await prisma.jobApplication.findFirst({
+          where: { id: body.projectId, userId: user.id },
+        });
+        projectId = project ? project.id : null;
+      }
     }
 
     const updated = await prisma.optimizationHistory.update({
@@ -46,6 +60,13 @@ export async function PATCH(request: Request, context: RouteContext) {
         ...(body.resumeTemplateId !== undefined
           ? { resumeTemplateId: body.resumeTemplateId }
           : {}),
+        ...(body.title !== undefined
+          ? { title: body.title.trim().slice(0, 120) || existing.title }
+          : {}),
+        ...(projectId !== undefined ? { projectId } : {}),
+      },
+      include: {
+        project: { select: { title: true, company: true } },
       },
     });
 
@@ -55,20 +76,23 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 }
 
-/** 删除单条历史记录 */
+/** 软删除单条历史记录 */
 export async function DELETE(request: Request, context: RouteContext) {
   try {
     const user = await requireUser(request);
     const { id } = await context.params;
 
     const existing = await prisma.optimizationHistory.findFirst({
-      where: { id, userId: user.id },
+      where: { id, userId: user.id, deletedAt: null },
     });
     if (!existing) {
       return errorResponse("记录不存在", 404);
     }
 
-    await prisma.optimizationHistory.delete({ where: { id } });
+    await prisma.optimizationHistory.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
     return jsonResponse({ ok: true });
   } catch (error) {
     return authErrorResponse(error) ?? errorResponse("服务器错误", 500);
