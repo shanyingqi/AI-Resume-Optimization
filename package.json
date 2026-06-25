@@ -8,14 +8,15 @@
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "postinstall": "prisma generate"
+    "db:push": "node scripts/db-push-railway.mjs",
+    "db:push:prisma": "prisma db push",
+    "db:migrate": "prisma migrate dev"
   },
   "dependencies": {
     "@fontsource/noto-sans-sc": "^5.2.9",
     "@pdf-lib/fontkit": "^1.1.1",
-    "@prisma/client": "^6.19.3",
+    "@prisma/adapter-mariadb": "^6.19.3",
+    "@prisma/client": "6.19.3",
     "@react-pdf/renderer": "^4.5.1",
     "bcryptjs": "^3.0.3",
     "docx": "^9.7.1",
@@ -23,8 +24,11 @@
     "jose": "^6.2.3",
     "jspdf": "^4.2.1",
     "mammoth": "^1.12.0",
+    "mariadb": "^3.5.3",
+    "mysql2": "^3.22.5",
     "next": "16.2.9",
     "pdf-lib": "^1.17.1",
+    "prisma": "6.19.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "unpdf": "^1.6.2"
@@ -37,7 +41,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
-    "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
