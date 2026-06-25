@@ -29,7 +29,11 @@ export async function PATCH(request: Request) {
     return errorResponse("未登录", 401);
   }
 
-  let body: { name?: string | null; avatarUrl?: string | null };
+  let body: {
+    name?: string | null;
+    avatarUrl?: string | null;
+    onboardingCompleted?: boolean;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -52,7 +56,7 @@ export async function PATCH(request: Request) {
         ? rawAvatar.trim().slice(0, 2_000_000) || null
         : undefined;
 
-  if (name === undefined && avatarUrl === undefined) {
+  if (name === undefined && avatarUrl === undefined && body.onboardingCompleted === undefined) {
     return errorResponse("参数无效");
   }
 
@@ -61,6 +65,9 @@ export async function PATCH(request: Request) {
     data: {
       ...(name !== undefined ? { name } : {}),
       ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+      ...(body.onboardingCompleted !== undefined
+        ? { onboardingCompleted: Boolean(body.onboardingCompleted) }
+        : {}),
     },
     select: userPublicSelect,
   });

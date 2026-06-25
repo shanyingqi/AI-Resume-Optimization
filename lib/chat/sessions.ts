@@ -33,14 +33,25 @@ export async function fetchChatSession(id: string): Promise<ChatSession | null> 
 }
 
 /** 创建草稿会话（不写入服务端，发送首条消息后才保存） */
-export function createDraftSession(context?: ChatContext): ChatSession {
+export function createDraftSession(
+  context?: ChatContext,
+  links?: { historyId?: string; projectId?: string },
+): ChatSession {
+  const title =
+    context?.projectTitle?.trim() ||
+    (context?.optimizeSummary
+      ? `优化追问 · ${preview(context.optimizeSummary, 24)}`
+      : "新对话");
+
   return {
     id: crypto.randomUUID(),
-    title: "新对话",
+    title,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     messages: [],
     context,
+    historyId: links?.historyId ?? context?.historyId,
+    projectId: links?.projectId ?? context?.projectId,
   };
 }
 

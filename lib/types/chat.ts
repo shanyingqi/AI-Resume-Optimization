@@ -21,6 +21,9 @@ export interface ChatContext {
   resume?: string;
   jobDescription?: string;
   optimizeSummary?: string;
+  historyId?: string;
+  projectId?: string;
+  projectTitle?: string;
 }
 
 export interface ChatSession {
@@ -30,6 +33,8 @@ export interface ChatSession {
   updatedAt: string;
   messages: ChatMessage[];
   context?: ChatContext;
+  historyId?: string;
+  projectId?: string;
 }
 
 export interface ChatMessageInput {

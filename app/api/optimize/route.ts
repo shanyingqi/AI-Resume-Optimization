@@ -2,14 +2,12 @@ import { callOptimizeAIStream } from "@/lib/ai/client";
 import type { OptimizeStreamEvent } from "@/lib/ai/stream-events";
 import { OPTIMIZE_STEP_TOTAL } from "@/lib/ai/stream-events";
 import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitResponse,
-} from "@/lib/api/rate-limit";
+  enforceRateLimit,
+  trackUsage,
+} from "@/lib/api/request-limit";
 import { buildOptimizePrompt } from "@/lib/prompts/optimize-resume";
 import {
   OPTIMIZE_RATE_LIMIT,
-  RATE_LIMIT_WINDOW_MS,
 } from "@/lib/resume/constants";
 import { validateOptimizeInput } from "@/lib/resume/validate";
 import type { OptimizeRequest } from "@/lib/types/resume";
@@ -20,15 +18,8 @@ function sseEncode(event: OptimizeStreamEvent): Uint8Array {
 
 /** 简历 AI 优化接口（SSE 流式）：分步反馈 + 流式生成结果 */
 export async function POST(request: Request) {
-  const ip = getClientIp(request);
-  const rate = checkRateLimit(
-    `optimize:${ip}`,
-    OPTIMIZE_RATE_LIMIT,
-    RATE_LIMIT_WINDOW_MS,
-  );
-  if (!rate.allowed) {
-    return rateLimitResponse(rate.retryAfterSec);
-  }
+  const limited = await enforceRateLimit(request, "optimize", OPTIMIZE_RATE_LIMIT);
+  if (limited) return limited;
 
   let body: OptimizeRequest;
 
@@ -52,6 +43,8 @@ export async function POST(request: Request) {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      void trackUsage(request, "optimize");
+
       const send = (event: OptimizeStreamEvent) => {
         if (request.signal.aborted) return;
         controller.enqueue(sseEncode(event));

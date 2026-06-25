@@ -19,8 +19,9 @@ function createPrismaClient() {
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
     database: parsed.pathname.replace(/^\//, ""),
-    connectionLimit: 10,
-    connectTimeout: 30_000,
+    connectionLimit: 5,
+    connectTimeout: 60_000,
+    acquireTimeout: 60_000,
   });
 
   return new PrismaClient({
@@ -34,3 +35,8 @@ export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
+
+/** 启动时预热连接，减少首次请求的建连等待 */
+void prisma.$queryRaw`SELECT 1`.catch(() => {
+  // 预热失败不阻断启动
+});

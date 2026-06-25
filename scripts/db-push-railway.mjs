@@ -60,10 +60,21 @@ const connection = await mysql.createConnection({
 });
 
 try {
-  const statements = sql
-    .split(/;\s*\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const phase2Path = resolve(rootDir, "scripts/phase2-schema.sql");
+  const phase2Sql = existsSync(phase2Path)
+    ? readFileSync(phase2Path, "utf8")
+    : "";
+
+  const statements = [
+    ...phase2Sql
+      .split(/;\s*\n/)
+      .map((s) => s.trim())
+      .filter((s) => s && !s.startsWith("--")),
+    ...sql
+      .split(/;\s*\n/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+  ];
 
   for (const statement of statements) {
     try {
@@ -73,8 +84,12 @@ try {
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
       if (
         message.includes("already exists") ||
+        message.includes("Duplicate column") ||
         code === "ER_FK_DUP_NAME" ||
-        code === "ER_DUP_KEYNAME"
+        code === "ER_DUP_KEYNAME" ||
+        code === "ER_DUP_FIELDNAME" ||
+        code === "ER_KEY_COLUMN_DOES_NOT_EXITS" ||
+        code === "ER_CANT_CREATE_TABLE"
       ) {
         console.log("skip:", message.split("\n")[0]);
         continue;
@@ -87,3 +102,8 @@ try {
 } finally {
   await connection.end();
 }
+
+// 确保二期新增列存在（部分环境 ALTER 可能被跳过）
+await import("node:child_process").then(({ execSync }) => {
+  execSync("node scripts/fix-phase2-columns.mjs", { stdio: "inherit", cwd: rootDir });
+});

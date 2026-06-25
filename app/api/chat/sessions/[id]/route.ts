@@ -67,6 +67,8 @@ export async function PUT(request: Request, context: RouteContext) {
       data: {
         title: session.title,
         context: contextValue,
+        historyId: session.historyId ?? null,
+        projectId: session.projectId ?? null,
         messages: {
           create: session.messages.map((msg) => ({
             id: msg.id,

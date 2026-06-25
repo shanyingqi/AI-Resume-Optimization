@@ -29,7 +29,10 @@ export default function RootLayout({
       lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex h-screen overflow-hidden">
+      <body
+        suppressHydrationWarning
+        className="flex h-screen overflow-hidden"
+      >
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

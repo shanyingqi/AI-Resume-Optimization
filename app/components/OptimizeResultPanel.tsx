@@ -235,7 +235,7 @@ export default function OptimizeResultPanel({
                   onClick={onStartChat}
                   className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
                 >
-                  继续 AI 对话
+                  就此结果提问
                 </button>
               )}
               <DownloadButton

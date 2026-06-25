@@ -99,10 +99,11 @@ export interface CoverLetterResult {
   highlights: string[];
 }
 
-/** 保存在 localStorage 中的历史记录条目 */
+/** 保存在数据库中的历史记录条目 */
 export interface HistoryRecord {
   id: string;
   createdAt: string;
+  title?: string;
   mode: OptimizeMode;
   resumePreview: string;
   jobDescriptionPreview?: string;
@@ -116,4 +117,7 @@ export interface HistoryRecord {
   coverLetter?: CoverLetterResult;
   /** 用户选择的简历模板 */
   resumeTemplateId?: ResumeTemplateId;
+  /** 关联的求职项目 */
+  projectId?: string;
+  projectTitle?: string;
 }

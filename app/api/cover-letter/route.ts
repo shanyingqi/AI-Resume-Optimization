@@ -1,28 +1,21 @@
 import { callCoverLetterAI } from "@/lib/ai/client";
 import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitResponse,
-} from "@/lib/api/rate-limit";
+  enforceRateLimit,
+  trackUsage,
+} from "@/lib/api/request-limit";
 import { buildCoverLetterPrompt } from "@/lib/prompts/cover-letter";
-import {
-  COVER_LETTER_RATE_LIMIT,
-  RATE_LIMIT_WINDOW_MS,
-} from "@/lib/resume/constants";
+import { COVER_LETTER_RATE_LIMIT } from "@/lib/resume/constants";
 import { validateCoverLetterInput } from "@/lib/resume/validate";
 import type { CoverLetterRequest } from "@/lib/types/resume";
 
 /** 根据简历与 JD 生成求职信 */
 export async function POST(request: Request) {
-  const ip = getClientIp(request);
-  const rate = checkRateLimit(
-    `cover-letter:${ip}`,
+  const limited = await enforceRateLimit(
+    request,
+    "cover_letter",
     COVER_LETTER_RATE_LIMIT,
-    RATE_LIMIT_WINDOW_MS,
   );
-  if (!rate.allowed) {
-    return rateLimitResponse(rate.retryAfterSec);
-  }
+  if (limited) return limited;
 
   let body: CoverLetterRequest;
 
@@ -41,6 +34,7 @@ export async function POST(request: Request) {
   try {
     const prompt = buildCoverLetterPrompt(resume.trim(), jobDescription.trim());
     const result = await callCoverLetterAI(prompt, request.signal);
+    void trackUsage(request, "cover_letter");
     return Response.json(result);
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {

@@ -21,7 +21,14 @@ import {
   saveChatSession,
   updateSessionLastAssistant,
 } from "@/lib/chat/sessions";
-import { DRAFT_CHAT_CONTEXT_KEY } from "@/lib/resume/constants";
+import { DRAFT_OPTIMIZE_KEY } from "@/lib/resume/constants";
+import { loadDraftChatPayload } from "@/lib/resume/draft-chat";
+import { MarkdownContent } from "@/lib/chat/markdown";
+import {
+  nextPairedMessageTimes,
+  pairedMessageTimes,
+  sortChatMessages,
+} from "@/lib/chat/message-order";
 import type { ChatAttachment, ChatContext, ChatMessage, ChatSession } from "@/lib/types/chat";
 
 interface ChatPanelProps {
@@ -33,12 +40,13 @@ function createMessage(
   role: ChatMessage["role"],
   content: string,
   attachments?: ChatAttachment[],
+  createdAt?: string,
 ): ChatMessage {
   return {
     id: crypto.randomUUID(),
     role,
     content,
-    createdAt: new Date().toISOString(),
+    createdAt: createdAt ?? new Date().toISOString(),
     attachments: attachments?.length ? attachments : undefined,
   };
 }
@@ -84,7 +92,11 @@ function MessageBody({
         </div>
       )}
       {msg.content ? (
-        <p className="whitespace-pre-wrap">{msg.content}</p>
+        isUser ? (
+          <p className="whitespace-pre-wrap">{msg.content}</p>
+        ) : (
+          <MarkdownContent text={msg.content} />
+        )
       ) : loading && msg.role === "assistant" ? (
         <span className="inline-flex items-center gap-1 text-zinc-400">
           <span className="animate-pulse">思考中</span>
@@ -93,20 +105,6 @@ function MessageBody({
       ) : null}
     </div>
   );
-}
-
-/**
- * 读取草稿上下文：从 sessionStorage 中获取草稿上下文。
- */
-function readDraftContext(): ChatContext | undefined {
-  try {
-    const raw = sessionStorage.getItem(DRAFT_CHAT_CONTEXT_KEY);
-    if (!raw) return undefined;
-    sessionStorage.removeItem(DRAFT_CHAT_CONTEXT_KEY);
-    return JSON.parse(raw) as ChatContext;
-  } catch {
-    return undefined;
-  }
 }
 
 // 聊天面板组件：显示聊天内容、输入框、错误提示。
@@ -121,13 +119,18 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
   const [loading, setLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [error, setError] = useState("");
+  const [pendingAutoMessage, setPendingAutoMessage] = useState<string | undefined>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftContextRef = useRef<ChatContext | undefined>(undefined);
+  const autoSendStartedRef = useRef(false);
   const activeSessionRef = useRef<string | undefined>(undefined);
+  const handleSendRef = useRef<
+    (e?: React.FormEvent, overrideText?: string) => Promise<void>
+  >(() => Promise.resolve());
 
   useEffect(() => {
     // 仅在切换到其他已有会话时中断请求，避免无意义 abort
@@ -141,15 +144,29 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
     activeSessionRef.current = sessionId;
 
     if (sessionId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSessionLoading(true);
+      setPendingAutoMessage(undefined);
+      autoSendStartedRef.current = false;
       void fetchChatSession(sessionId).then((loaded) => {
-        setSession(loaded);
-        setPersisted(Boolean(loaded));
+        if (!loaded) {
+          setSession(null);
+          setPersisted(false);
+          setSessionLoading(false);
+          return;
+        }
+        setSession({
+          ...loaded,
+          messages: sortChatMessages(loaded.messages),
+        });
+        setPersisted(true);
         setSessionLoading(false);
       });
     } else {
-      const context = readDraftContext();
+      const { context, autoMessage } = loadDraftChatPayload();
       draftContextRef.current = context;
+      autoSendStartedRef.current = false;
+      setPendingAutoMessage(autoMessage);
       setSession(createDraftSession(context));
       setPersisted(false);
     }
@@ -159,6 +176,26 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
     setError("");
     setStreamingContent("");
     setLoading(false);
+  }, [sessionId]);
+
+  useEffect(() => {
+    function onDraftReady() {
+      if (sessionId) return;
+      const { context, autoMessage } = loadDraftChatPayload();
+      draftContextRef.current = context;
+      autoSendStartedRef.current = false;
+      setPendingAutoMessage(autoMessage);
+      setSession(createDraftSession(context));
+      setPersisted(false);
+      setInput("");
+      setPendingAttachments([]);
+      setError("");
+      setStreamingContent("");
+      setLoading(false);
+    }
+
+    window.addEventListener("xiaodan-chat-draft-ready", onDraftReady);
+    return () => window.removeEventListener("xiaodan-chat-draft-ready", onDraftReady);
   }, [sessionId]);
 
   useEffect(() => {
@@ -174,10 +211,12 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
   }, [session?.messages, streamingContent]);
 
   // 发送消息
-  async function handleSend(e?: React.FormEvent) {
+  async function handleSend(e?: React.FormEvent, overrideText?: string) {
     e?.preventDefault();
 
-    const text = defaultMessageWithAttachments(input, pendingAttachments);
+    const text = overrideText?.trim()
+      ? overrideText.trim()
+      : defaultMessageWithAttachments(input, pendingAttachments);
     if (!text || loading || !session) return;
 
     const attachments = pendingAttachments.length ? [...pendingAttachments] : undefined;
@@ -198,9 +237,18 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const userMessage = createMessage("user", text, attachments);
-    const assistantPlaceholder = createMessage("assistant", "");
     const isFirstPersist = !persisted;
+
+    const [userTime, assistantTime] = isFirstPersist
+      ? pairedMessageTimes()
+      : nextPairedMessageTimes(session.messages);
+    const userMessage = createMessage("user", text, attachments, userTime);
+    const assistantPlaceholder = createMessage(
+      "assistant",
+      "",
+      undefined,
+      assistantTime,
+    );
 
     let workingSession: ChatSession;
 
@@ -219,8 +267,11 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
       };
     }
 
-    setSession(workingSession);
-    void saveChatSession(workingSession).catch(() => {
+    setSession({ ...workingSession, messages: sortChatMessages(workingSession.messages) });
+    void saveChatSession({
+      ...workingSession,
+      messages: sortChatMessages(workingSession.messages),
+    }).catch(() => {
       setError("会话保存失败，请检查网络后重试");
     });
     setInput("");
@@ -242,14 +293,21 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
         (partial) => {
           setStreamingContent(partial);
           latestSession = updateSessionLastAssistant(latestSession, partial);
-          setSession(latestSession);
+          setSession({
+            ...latestSession,
+            messages: sortChatMessages(latestSession.messages),
+          });
         },
         controller.signal,
       );
 
       latestSession = updateSessionLastAssistant(latestSession, reply);
-      setSession(latestSession);
-      await saveChatSession(latestSession);
+      const finalSession = {
+        ...latestSession,
+        messages: sortChatMessages(latestSession.messages),
+      };
+      setSession(finalSession);
+      await saveChatSession(finalSession);
       setStreamingContent("");
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
@@ -295,6 +353,26 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
       }
     }
   }
+
+  // eslint-disable-next-line react-hooks/refs
+  handleSendRef.current = handleSend;
+
+  useEffect(() => {
+    if (
+      sessionId ||
+      !session ||
+      session.messages.length > 0 ||
+      !pendingAutoMessage ||
+      autoSendStartedRef.current
+    ) {
+      return;
+    }
+
+    autoSendStartedRef.current = true;
+    const message = pendingAutoMessage;
+    setPendingAutoMessage(undefined);
+    void handleSendRef.current(undefined, message);
+  }, [session, sessionId, pendingAutoMessage]);
 
   // 取消发送
   function handleCancel() {
@@ -375,25 +453,57 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
     );
   }
 
-  const hasContext = Boolean(session.context?.resume?.trim());
-  const displayMessages = session.messages.map((msg) => {
-    if (
-      loading &&
-      streamingContent &&
-      msg.role === "assistant" &&
-      msg.id === session.messages[session.messages.length - 1]?.id
-    ) {
-      return { ...msg, content: streamingContent };
-    }
-    return msg;
-  });
+  function goToOptimize() {
+    if (!session?.context?.resume) return;
+    sessionStorage.setItem(
+      DRAFT_OPTIMIZE_KEY,
+      JSON.stringify({
+        resume: session.context.resume,
+        jobDescription: session.context.jobDescription,
+        mode: session.context.jobDescription ? "targeted" : "general",
+      }),
+    );
+    router.push("/resume");
+  }
 
-  const suggestions = hasContext
+  const displayMessages = sortChatMessages(
+    session.messages.map((msg) => {
+      if (
+        loading &&
+        streamingContent &&
+        msg.role === "assistant" &&
+        msg.id === session.messages[session.messages.length - 1]?.id
+      ) {
+        return { ...msg, content: streamingContent };
+      }
+      return msg;
+    }),
+  );
+
+  const hasContext = Boolean(
+    session.context?.resume?.trim() ||
+      session.context?.jobDescription?.trim() ||
+      session.context?.optimizeSummary?.trim(),
+  );
+  const contextSuggestions = session.context?.jobDescription?.trim()
     ? [
-        "我的简历有哪些需要改进的地方？",
-        "帮我改写一段工作经历，突出量化成果",
-        "针对目标岗位，我还缺哪些关键技能？",
+        "结合 JD，我的简历还有哪些短板？",
+        "帮我改写一段经历，更贴合这个岗位",
+        "模拟面试官可能问我的问题",
       ]
+    : session.context?.optimizeSummary?.trim()
+      ? [
+          "总结刚才优化结果里最需要改的三点",
+          "帮我改写一段工作经历，突出量化成果",
+          "针对目标岗位，我还缺哪些关键技能？",
+        ]
+      : [
+          "我的简历有哪些需要改进的地方？",
+          "帮我改写一段工作经历，突出量化成果",
+          "针对目标岗位，我还缺哪些关键技能？",
+        ];
+  const suggestions = hasContext
+    ? contextSuggestions
     : [
         "应届生简历应该怎么写？",
         "如何用 STAR 法则描述项目经历？",
@@ -403,26 +513,67 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-zinc-950">
       {hasContext && (
-        <div className="shrink-0 border-b border-zinc-100 px-4 py-2 text-xs text-emerald-700 dark:border-zinc-800 dark:text-emerald-300">
-          已关联简历内容，可直接针对你的简历提问
-          {session.context?.jobDescription?.trim() && "（含目标 JD）"}
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-zinc-100 px-4 py-2.5 pr-[3.75rem] text-xs text-emerald-700 sm:pr-[4.5rem] dark:border-zinc-800 dark:text-emerald-300">
+          <span className="min-w-0">
+            已关联简历
+            {session.context?.projectTitle
+              ? ` · ${session.context.projectTitle}`
+              : session.context?.optimizeSummary
+                ? " · 来自优化结果"
+                : ""}
+            {session.context?.jobDescription?.trim() && "（含 JD）"}
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {session.context?.projectId && (
+              <button
+                type="button"
+                onClick={() => router.push(`/projects/${session.context?.projectId}`)}
+                className="rounded-lg border border-emerald-200 px-2 py-1 hover:bg-emerald-50 dark:border-emerald-800"
+              >
+                查看项目
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={goToOptimize}
+              className="rounded-lg border border-emerald-200 px-2 py-1 hover:bg-emerald-50 dark:border-emerald-800"
+            >
+              去优化简历
+            </button>
+          </div>
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+      <div
+        className={`min-h-0 flex-1 overflow-y-auto px-4 pb-4 pr-[3.75rem] sm:px-5 sm:pb-5 sm:pr-[4.5rem] ${
+          hasContext ? "pt-3" : "pt-14 sm:pt-16"
+        }`}
+      >
         {displayMessages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 py-8 text-center">
-            <p className="text-lg font-medium">简历顾问 AI</p>
-            <p className="max-w-md text-sm text-zinc-500">
-              可以问我简历改写、JD 匹配、面试准备、职业规划等问题
+            <p className="text-lg font-medium">
+              {hasContext ? "已载入简历与优化上下文" : "简历顾问 AI"}
             </p>
+            <p className="max-w-md text-sm text-zinc-500">
+              {hasContext
+                ? session.context?.projectTitle
+                  ? `正在围绕「${session.context.projectTitle}」展开讨论，AI 已读取你的简历${session.context?.jobDescription?.trim() ? "与 JD" : ""}。`
+                  : `AI 已读取你的简历${session.context?.jobDescription?.trim() ? "与 JD" : ""}，可直接追问优化建议。`
+                : "可以问我简历改写、JD 匹配、面试准备、职业规划等问题"}
+            </p>
+            {hasContext && pendingAutoMessage && loading && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                正在根据优化记录自动发起提问…
+              </p>
+            )}
             <div className="flex flex-wrap justify-center gap-2">
               {suggestions.map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => setInput(s)}
-                  className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 transition hover:border-emerald-300 hover:bg-emerald-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/50"
+                  disabled={loading}
+                  className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/50"
                 >
                   {s}
                 </button>

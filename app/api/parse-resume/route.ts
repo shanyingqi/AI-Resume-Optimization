@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitResponse,
-} from "@/lib/api/rate-limit";
+  enforceRateLimit,
+  trackUsage,
+} from "@/lib/api/request-limit";
 import {
   MAX_RESUME_FILE_SIZE,
   PARSE_RATE_LIMIT,
-  RATE_LIMIT_WINDOW_MS,
 } from "@/lib/resume/constants";
 import { parseDocx, parsePdf } from "@/lib/resume/parse-server";
 import { validateResumeLength } from "@/lib/resume/validate";
@@ -17,15 +15,8 @@ export const runtime = "nodejs";
 
 /** 简历文件解析接口：接收 PDF / DOCX，返回提取的纯文本 */
 export async function POST(request: Request) {
-  const ip = getClientIp(request);
-  const rate = checkRateLimit(
-    `parse:${ip}`,
-    PARSE_RATE_LIMIT,
-    RATE_LIMIT_WINDOW_MS,
-  );
-  if (!rate.allowed) {
-    return rateLimitResponse(rate.retryAfterSec);
-  }
+  const limited = await enforceRateLimit(request, "parse", PARSE_RATE_LIMIT);
+  if (limited) return limited;
 
   try {
     const formData = await request.formData();
@@ -75,6 +66,8 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    void trackUsage(request, "parse");
 
     return NextResponse.json({
       text,

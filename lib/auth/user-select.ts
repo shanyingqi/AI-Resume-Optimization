@@ -4,5 +4,6 @@ export const userPublicSelect = {
   email: true,
   name: true,
   avatarUrl: true,
+  onboardingCompleted: true,
   createdAt: true,
 } as const;

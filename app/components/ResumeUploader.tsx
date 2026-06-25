@@ -1,10 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import {
-  ACCEPTED_RESUME_EXTENSIONS,
-  MAX_RESUME_FILE_SIZE,
-} from "@/lib/resume/constants";
+import { ACCEPTED_RESUME_EXTENSIONS } from "@/lib/resume/constants";
+import { parseResumeFile } from "@/lib/resume/parse-client";
 
 interface ResumeUploaderProps {
   onParsed: (text: string, fileName: string) => void;
@@ -22,46 +20,14 @@ export default function ResumeUploader({
   const [error, setError] = useState("");
   const [lastFile, setLastFile] = useState("");
 
-  // 处理文件上传
   async function handleFile(file: File) {
     setError("");
     setLastFile("");
-
-    if (file.size > MAX_RESUME_FILE_SIZE) {
-      setError("文件大小不能超过 5MB");
-      return;
-    }
-
-    const name = file.name.toLowerCase();
-    const isText = name.endsWith(".txt") || name.endsWith(".md");
-
     setParsing(true);
     try {
-      if (isText) {
-        const text = await file.text();
-        if (!text.trim()) {
-          throw new Error("文件内容为空");
-        }
-        setLastFile(file.name);
-        onParsed(text.trim(), file.name);
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/parse-resume", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error ?? "解析失败");
-      }
-
-      setLastFile(data.fileName);
-      onParsed(data.text, data.fileName);
+      const { text, fileName } = await parseResumeFile(file);
+      setLastFile(fileName);
+      onParsed(text, fileName);
     } catch (err) {
       setError(err instanceof Error ? err.message : "上传失败");
     } finally {
