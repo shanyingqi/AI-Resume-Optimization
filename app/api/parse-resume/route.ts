@@ -1,3 +1,4 @@
+import { moderateTextAsync } from "@/lib/content/moderation";
 import { NextResponse } from "next/server";
 import {
   enforceRateLimit,
@@ -65,6 +66,11 @@ export async function POST(request: Request) {
         { error: `${lengthError}，请精简后重新上传` },
         { status: 400 },
       );
+    }
+
+    const contentError = await moderateTextAsync(text);
+    if (contentError) {
+      return NextResponse.json({ error: contentError }, { status: 400 });
     }
 
     void trackUsage(request, "parse");

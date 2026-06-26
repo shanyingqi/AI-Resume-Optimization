@@ -1,3 +1,4 @@
+import { normalizeEmail, validateEmail } from "@/lib/auth/email";
 import { verifyPassword } from "@/lib/auth/password";
 import {
   createSessionToken,
@@ -17,12 +18,15 @@ export async function POST(request: Request) {
     return errorResponse("请求格式无效");
   }
 
-  const email = body.email?.trim().toLowerCase() ?? "";
+  const email = normalizeEmail(body.email ?? "");
   const password = body.password ?? "";
 
-  if (!email || !password) {
-    return errorResponse("邮箱和密码不能为空");
+  if (!password) {
+    return errorResponse("密码不能为空");
   }
+
+  const emailError = validateEmail(email);
+  if (emailError) return errorResponse(emailError);
 
   try {
     const user = await prisma.user.findUnique({

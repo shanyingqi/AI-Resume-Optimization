@@ -25,6 +25,7 @@ model User {
   historyRecords  OptimizationHistory[]
   chatSessions    ChatSession[]
   usageEvents     UsageEvent[]
+  optimizeDraft   OptimizeDraft?
 
   @@map("users")
 }
@@ -150,4 +151,18 @@ model UsageEvent {
 
   @@index([userId, action, createdAt])
   @@map("usage_events")
+}
+
+model OptimizeDraft {
+  id             String   @id @default(uuid())
+  userId         String   @unique @map("user_id")
+  resume         String   @db.LongText
+  jobDescription String   @map("job_description") @db.LongText
+  mode           String   @default("general")
+  inputTab       String   @default("upload") @map("input_tab")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("optimize_drafts")
 }

@@ -18,6 +18,10 @@ import { DRAFT_OPTIMIZE_KEY } from "@/lib/resume/constants";
 import type { JobApplicationSummary } from "@/lib/types/project";
 import { DRAFT_STORAGE_KEY, MAX_JD_CHARS, MAX_RESUME_CHARS } from "@/lib/resume/constants";
 import {
+  fetchOptimizeDraft,
+  saveOptimizeDraft,
+} from "@/lib/resume/draft";
+import {
   fetchHistory,
   saveHistoryRecord,
   updateHistoryCoverLetter,
@@ -68,6 +72,9 @@ export default function ResumeOptimizer() {
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const profileLoadedRef = useRef(false);
+  const draftReadyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const appliedProjectNavRef = useRef<string | null>(null);
 
   const refreshHistory = (q?: string) => {
     void fetchHistory({ q: q?.trim() || undefined })
@@ -75,67 +82,126 @@ export default function ResumeOptimizer() {
       .catch(() => setHistoryRecords([]));
   };
 
-  // 初始化：加载历史、草稿、主简历；支持从 URL 恢复某条记录
+  // 初始化：加载历史、账号草稿、主简历；支持从 URL 恢复某条记录
   useEffect(() => {
     refreshHistory();
 
-    try {
-      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-      if (raw) {
-        const draft = JSON.parse(raw) as DraftData;
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (draft.resume) setResume(draft.resume);
-        if (draft.jobDescription) setJobDescription(draft.jobDescription);
-        if (draft.mode) setMode(draft.mode);
-        if (draft.inputTab) setInputTab(draft.inputTab);
-        setDraftRestored(true);
+    void (async () => {
+      let restoredFromDraft = false;
+      const projectIdParam = searchParams.get("projectId");
+
+      if (projectIdParam && appliedProjectNavRef.current !== projectIdParam) {
+        appliedProjectNavRef.current = projectIdParam;
+        setSelectedProjectId(projectIdParam);
+        setMode("targeted");
         profileLoadedRef.current = true;
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const optimizeDraft = sessionStorage.getItem(DRAFT_OPTIMIZE_KEY);
-      if (optimizeDraft) {
-        const parsed = JSON.parse(optimizeDraft) as {
-          resume?: string;
-          jobDescription?: string;
-          mode?: OptimizeMode;
-          projectId?: string;
-        };
-        sessionStorage.removeItem(DRAFT_OPTIMIZE_KEY);
-        if (parsed.resume) setResume(parsed.resume);
-        if (parsed.jobDescription) setJobDescription(parsed.jobDescription);
-        if (parsed.mode) setMode(parsed.mode);
-        if (parsed.projectId) setSelectedProjectId(parsed.projectId);
-        profileLoadedRef.current = true;
-      }
-    } catch {
-      // ignore
-    }
-
-    const historyId = searchParams.get("historyId");
-    if (historyId) {
-      void fetchHistory()
-        .then((records) => {
-          const record = records.find((r) => r.id === historyId);
-          if (record) handleRestoreHistory(record);
-        })
-        .catch(() => undefined);
-      profileLoadedRef.current = true;
-      return;
-    }
-
-    if (!profileLoadedRef.current) {
-      void fetchResumeProfile()
-        .then((profile) => {
-          if (profile?.content && !resume) {
-            setResume(profile.content);
+        restoredFromDraft = true;
+        try {
+          const project = await fetchProject(projectIdParam);
+          if (project.jobDescription?.trim()) {
+            setJobDescription(project.jobDescription);
+            setError("");
+          } else {
+            setError("该求职项目尚未填写 JD，请先在「求职项目」中补充");
           }
-        })
-        .catch(() => undefined);
-    }
+        } catch {
+          setError("载入求职项目失败");
+        }
+      }
+
+      try {
+        const optimizeDraft = sessionStorage.getItem(DRAFT_OPTIMIZE_KEY);
+        if (optimizeDraft) {
+          const parsed = JSON.parse(optimizeDraft) as {
+            resume?: string;
+            jobDescription?: string;
+            mode?: OptimizeMode;
+            projectId?: string;
+          };
+          sessionStorage.removeItem(DRAFT_OPTIMIZE_KEY);
+          if (parsed.resume) setResume(parsed.resume);
+          if (parsed.jobDescription) setJobDescription(parsed.jobDescription);
+          // 兼容旧版 sessionStorage：仍带 projectId 时强制定向优化
+          if (!projectIdParam && parsed.projectId) {
+            setSelectedProjectId(parsed.projectId);
+            setMode("targeted");
+            profileLoadedRef.current = true;
+            restoredFromDraft = true;
+          } else if (!projectIdParam && parsed.mode) {
+            setMode(parsed.mode);
+          }
+          if (!profileLoadedRef.current) profileLoadedRef.current = true;
+          if (!restoredFromDraft) restoredFromDraft = Boolean(parsed.resume || parsed.jobDescription);
+        }
+      } catch {
+        // ignore
+      }
+
+      const historyId = searchParams.get("historyId");
+      if (historyId) {
+        void fetchHistory()
+          .then((records) => {
+            const record = records.find((r) => r.id === historyId);
+            if (record) handleRestoreHistory(record);
+          })
+          .catch(() => undefined);
+        profileLoadedRef.current = true;
+        draftReadyRef.current = true;
+        return;
+      }
+
+      if (!restoredFromDraft) {
+        try {
+          const draft = await fetchOptimizeDraft();
+          if (draft !== null) {
+            setResume(draft.resume ?? "");
+            setJobDescription(draft.jobDescription ?? "");
+            if (draft.mode) setMode(draft.mode);
+            if (draft.inputTab) setInputTab(draft.inputTab);
+            if (draft.resume?.trim() || draft.jobDescription?.trim()) {
+              setDraftRestored(true);
+            }
+            profileLoadedRef.current = true;
+            restoredFromDraft = true;
+          } else {
+            const legacyRaw = localStorage.getItem(DRAFT_STORAGE_KEY);
+            if (legacyRaw) {
+              const legacy = JSON.parse(legacyRaw) as DraftData;
+              localStorage.removeItem(DRAFT_STORAGE_KEY);
+              if (legacy.resume || legacy.jobDescription) {
+                if (legacy.resume) setResume(legacy.resume);
+                if (legacy.jobDescription) setJobDescription(legacy.jobDescription);
+                if (legacy.mode) setMode(legacy.mode);
+                if (legacy.inputTab) setInputTab(legacy.inputTab);
+                setDraftRestored(true);
+                profileLoadedRef.current = true;
+                restoredFromDraft = true;
+                void saveOptimizeDraft({
+                  resume: legacy.resume ?? "",
+                  jobDescription: legacy.jobDescription ?? "",
+                  mode: legacy.mode ?? "general",
+                  inputTab: legacy.inputTab ?? "upload",
+                }).catch(() => undefined);
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!profileLoadedRef.current) {
+        void fetchResumeProfile()
+          .then((profile) => {
+            if (profile?.content && !resume) {
+              setResume(profile.content);
+            }
+          })
+          .catch(() => undefined);
+      }
+
+      draftReadyRef.current = true;
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -150,10 +216,20 @@ export default function ResumeOptimizer() {
       .catch(() => setProjects([]));
   }, []);
 
-  // 编辑内容变化时自动保存草稿
+  // 编辑内容变化时自动保存草稿到账号
   useEffect(() => {
-    const draft: DraftData = { resume, jobDescription, mode, inputTab };
-    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    if (!draftReadyRef.current) return;
+    if (!resume.trim() && !jobDescription.trim()) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const draft: DraftData = { resume, jobDescription, mode, inputTab };
+      void saveOptimizeDraft(draft).catch(() => undefined);
+    }, 500);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
   }, [resume, jobDescription, mode, inputTab]);
 
   useEffect(() => {
@@ -163,15 +239,32 @@ export default function ResumeOptimizer() {
   }, []);
 
   // 清空所有输入内容
-  function handleClear() {
+  async function handleClear() {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
     setResume("");
     setJobDescription("");
+    setMode("general");
+    setSelectedProjectId("");
     setResult(null);
     setError("");
     setActiveHistoryId(undefined);
     setResumeTemplateId("classic");
-    localStorage.removeItem(DRAFT_STORAGE_KEY);
     setDraftRestored(false);
+
+    try {
+      await saveOptimizeDraft({
+        resume: "",
+        jobDescription: "",
+        mode: "general",
+        inputTab,
+      });
+    } catch {
+      // ignore
+    }
   }
 
   // 恢复历史记录
@@ -386,7 +479,7 @@ export default function ResumeOptimizer() {
 
       {draftRestored && (
         <p className="rounded-lg bg-blue-50 px-4 py-2 text-xs text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-          已恢复上次未完成的草稿
+          已从账号恢复上次未完成的草稿
         </p>
       )}
 
@@ -583,7 +676,7 @@ export default function ResumeOptimizer() {
             )}
             <button
               type="button"
-              onClick={handleClear}
+              onClick={() => void handleClear()}
               disabled={loading}
               className="rounded-xl border border-zinc-200 px-4 py-3 text-sm text-zinc-600 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >

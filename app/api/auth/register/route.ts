@@ -1,21 +1,13 @@
 import { hashPassword } from "@/lib/auth/password";
+import { normalizeEmail, validateEmail } from "@/lib/auth/email";
 import {
   createSessionToken,
   setSessionCookie,
 } from "@/lib/auth/session";
+import { validateUsernameAsync } from "@/lib/content/moderation";
 import { prisma } from "@/lib/db/prisma";
 import { errorResponse, jsonResponse } from "@/lib/api/json";
 import { userPublicSelect } from "@/lib/auth/user-select";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// 验证邮箱
-function validateEmail(email: string): string | null {
-  const trimmed = email.trim().toLowerCase();
-  if (!trimmed) return "邮箱不能为空";
-  if (!EMAIL_RE.test(trimmed)) return "邮箱格式无效";
-  return null;
-}
 
 // 验证密码
 function validatePassword(password: string): string | null {
@@ -35,7 +27,7 @@ export async function POST(request: Request) {
     return errorResponse("请求格式无效");
   }
 
-  const email = body.email?.trim().toLowerCase() ?? "";
+  const email = normalizeEmail(body.email ?? "");
   const password = body.password ?? "";
   const name = body.name?.trim() || null;
 
@@ -44,6 +36,11 @@ export async function POST(request: Request) {
 
   const passwordError = validatePassword(password);
   if (passwordError) return errorResponse(passwordError);
+
+  if (name) {
+    const nameError = await validateUsernameAsync(name);
+    if (nameError) return errorResponse(nameError);
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {

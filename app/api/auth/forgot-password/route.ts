@@ -1,3 +1,4 @@
+import { normalizeEmail, validateEmail } from "@/lib/auth/email";
 import { resetPasswordByEmail } from "@/lib/auth/password-reset";
 import { errorResponse, jsonResponse } from "@/lib/api/json";
 
@@ -11,12 +12,11 @@ export async function POST(request: Request) {
     return errorResponse("请求格式无效");
   }
 
-  const email = body.email?.trim().toLowerCase() ?? "";
+  const email = normalizeEmail(body.email ?? "");
   const password = body.password ?? "";
 
-  if (!email) {
-    return errorResponse("请输入邮箱");
-  }
+  const emailError = validateEmail(email);
+  if (emailError) return errorResponse(emailError);
   if (!password) {
     return errorResponse("请输入新密码");
   }

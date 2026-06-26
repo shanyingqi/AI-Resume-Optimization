@@ -1,3 +1,4 @@
+import { moderateText, moderateTextAsync } from "@/lib/content/moderation";
 import {
   MAX_JD_CHARS,
   MAX_RESUME_CHARS,
@@ -33,6 +34,9 @@ export function validateOptimizeInput(
   const resumeError = validateResumeLength(resume);
   if (resumeError) return resumeError;
 
+  const resumeContentError = moderateText(resume);
+  if (resumeContentError) return resumeContentError;
+
   if (mode === "targeted") {
     if (!projectId) {
       return "JD 定向优化需先选择求职项目";
@@ -42,7 +46,14 @@ export function validateOptimizeInput(
     }
   }
 
-  return validateJobDescriptionLength(jobDescription);
+  const jdLengthError = validateJobDescriptionLength(jobDescription);
+  if (jdLengthError) return jdLengthError;
+
+  if (jobDescription?.trim()) {
+    return moderateText(jobDescription);
+  }
+
+  return null;
 }
 
 // 验证求职信输入
@@ -53,9 +64,54 @@ export function validateCoverLetterInput(
   const resumeError = validateResumeLength(resume);
   if (resumeError) return resumeError;
 
+  const resumeContentError = moderateText(resume);
+  if (resumeContentError) return resumeContentError;
+
   if (!jobDescription?.trim()) {
     return "生成求职信需要提供目标岗位 JD";
   }
 
-  return validateJobDescriptionLength(jobDescription);
+  const jdLengthError = validateJobDescriptionLength(jobDescription);
+  if (jdLengthError) return jdLengthError;
+
+  return moderateText(jobDescription);
+}
+
+/** 服务端：优化输入校验 + 可选第三方内容审核 */
+export async function validateOptimizeInputAsync(
+  resume: string,
+  jobDescription: string | undefined,
+  mode: OptimizeMode,
+  projectId?: string,
+): Promise<string | null> {
+  const syncError = validateOptimizeInput(
+    resume,
+    jobDescription,
+    mode,
+    projectId,
+  );
+  if (syncError) return syncError;
+
+  const resumeRemote = await moderateTextAsync(resume);
+  if (resumeRemote) return resumeRemote;
+
+  if (jobDescription?.trim()) {
+    return moderateTextAsync(jobDescription);
+  }
+
+  return null;
+}
+
+/** 服务端：求职信输入校验 + 可选第三方内容审核 */
+export async function validateCoverLetterInputAsync(
+  resume: string,
+  jobDescription: string,
+): Promise<string | null> {
+  const syncError = validateCoverLetterInput(resume, jobDescription);
+  if (syncError) return syncError;
+
+  const resumeRemote = await moderateTextAsync(resume);
+  if (resumeRemote) return resumeRemote;
+
+  return moderateTextAsync(jobDescription);
 }

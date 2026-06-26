@@ -7,8 +7,10 @@ import {
   MAX_RESUME_CHARS,
   MAX_RESUME_FILE_SIZE,
 } from "@/lib/resume/constants";
+import { moderateText } from "@/lib/content/moderation";
 import type { ChatAttachment, ChatMessage, ChatMessageInput } from "@/lib/types/chat";
 
+// 获取文件扩展名
 function getExtension(name: string): string {
   const dot = name.lastIndexOf(".");
   return dot >= 0 ? name.slice(dot).toLowerCase() : "";
@@ -56,6 +58,10 @@ export async function readFileAttachment(file: File): Promise<ChatAttachment> {
     const text = await file.text();
     if (!text.trim()) {
       throw new Error("文件内容为空");
+    }
+    const contentError = moderateText(text);
+    if (contentError) {
+      throw new Error(contentError);
     }
     return {
       id: crypto.randomUUID(),

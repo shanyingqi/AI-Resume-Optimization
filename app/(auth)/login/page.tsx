@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { validateEmail } from "@/lib/auth/email";
+import { validateUsername } from "@/lib/content/moderation";
 import { ApiError, useAuth } from "@/app/components/AuthProvider";
 
 // 登录页面
@@ -47,6 +49,22 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setSubmitting(true);
+
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
+      setSubmitting(false);
+      return;
+    }
+
+    if (mode === "register" && name.trim()) {
+      const nameError = validateUsername(name.trim());
+      if (nameError) {
+        setError(nameError);
+        setSubmitting(false);
+        return;
+      }
+    }
 
     try {
       if (mode === "login") {

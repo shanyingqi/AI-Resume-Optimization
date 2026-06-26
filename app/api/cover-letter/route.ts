@@ -5,7 +5,7 @@ import {
 } from "@/lib/api/request-limit";
 import { buildCoverLetterPrompt } from "@/lib/prompts/cover-letter";
 import { COVER_LETTER_RATE_LIMIT } from "@/lib/resume/constants";
-import { validateCoverLetterInput } from "@/lib/resume/validate";
+import { validateCoverLetterInputAsync } from "@/lib/resume/validate";
 import type { CoverLetterRequest } from "@/lib/types/resume";
 
 /** 根据简历与 JD 生成求职信 */
@@ -26,7 +26,10 @@ export async function POST(request: Request) {
   }
 
   const { resume, jobDescription } = body;
-  const validationError = validateCoverLetterInput(resume, jobDescription);
+  const validationError = await validateCoverLetterInputAsync(
+    resume,
+    jobDescription,
+  );
   if (validationError) {
     return Response.json({ error: validationError }, { status: 400 });
   }

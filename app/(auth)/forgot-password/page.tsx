@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { validateEmail } from "@/lib/auth/email";
 import { ApiError, apiFetch } from "@/lib/api/client";
 
 // 找回密码页面
@@ -18,6 +19,12 @@ export default function ForgotPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
 
     if (password.length < 6) {
       setError("密码至少 6 位");

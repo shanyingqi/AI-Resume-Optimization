@@ -65,11 +65,9 @@ export default function ProjectDetailPage() {
       JSON.stringify({
         resume: resume || undefined,
         jobDescription: project.jobDescription || undefined,
-        mode: project.jobDescription?.trim() ? "targeted" : "general",
-        projectId: project.id,
       }),
     );
-    router.push("/resume");
+    router.push(`/resume?projectId=${encodeURIComponent(project.id)}`);
   }
 
   if (!project) {
