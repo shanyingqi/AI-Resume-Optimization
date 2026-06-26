@@ -160,6 +160,7 @@ model OptimizeDraft {
   jobDescription String   @map("job_description") @db.LongText
   mode           String   @default("general")
   inputTab       String   @default("upload") @map("input_tab")
+  cleared        Boolean  @default(false) @map("cleared")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

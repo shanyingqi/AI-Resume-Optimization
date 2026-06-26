@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ApiError, useAuth } from "@/app/components/AuthProvider";
 import HistoryPanel from "./HistoryPanel";
 import OptimizeResultPanel from "./OptimizeResultPanel";
 import ResumeProfileBar from "./ResumeProfileBar";
@@ -21,6 +22,10 @@ import {
   fetchOptimizeDraft,
   saveOptimizeDraft,
 } from "@/lib/resume/draft";
+import {
+  isDraftClearedLocally,
+  setDraftClearedLocally,
+} from "@/lib/resume/draft-preference";
 import {
   fetchHistory,
   saveHistoryRecord,
@@ -52,6 +57,7 @@ interface DraftData {
 export default function ResumeOptimizer() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const [resume, setResume] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [mode, setMode] = useState<OptimizeMode>("general");
@@ -151,9 +157,22 @@ export default function ResumeOptimizer() {
       }
 
       if (!restoredFromDraft) {
+        const skipProfilePrefill =
+          isDraftClearedLocally(user?.id) || profileLoadedRef.current;
+
         try {
           const draft = await fetchOptimizeDraft();
           if (draft !== null) {
+            const draftCleared =
+              draft.cleared ||
+              (!draft.resume?.trim() && !draft.jobDescription?.trim());
+
+            if (draftCleared) {
+              setDraftClearedLocally(user?.id, true);
+            } else {
+              setDraftClearedLocally(user?.id, false);
+            }
+
             setResume(draft.resume ?? "");
             setJobDescription(draft.jobDescription ?? "");
             if (draft.mode) setMode(draft.mode);
@@ -163,7 +182,7 @@ export default function ResumeOptimizer() {
             }
             profileLoadedRef.current = true;
             restoredFromDraft = true;
-          } else {
+          } else if (!skipProfilePrefill) {
             const legacyRaw = localStorage.getItem(DRAFT_STORAGE_KEY);
             if (legacyRaw) {
               const legacy = JSON.parse(legacyRaw) as DraftData;
@@ -176,25 +195,34 @@ export default function ResumeOptimizer() {
                 setDraftRestored(true);
                 profileLoadedRef.current = true;
                 restoredFromDraft = true;
+                setDraftClearedLocally(user?.id, false);
                 void saveOptimizeDraft({
                   resume: legacy.resume ?? "",
                   jobDescription: legacy.jobDescription ?? "",
                   mode: legacy.mode ?? "general",
                   inputTab: legacy.inputTab ?? "upload",
+                  cleared: false,
                 }).catch(() => undefined);
               }
             }
           }
         } catch {
-          // ignore
+          // 草稿 API 不可用时，若本机有清空标记则不再自动填主简历
+          if (skipProfilePrefill) {
+            profileLoadedRef.current = true;
+          }
         }
       }
 
-      if (!profileLoadedRef.current) {
+      const shouldLoadProfile =
+        !profileLoadedRef.current &&
+        !isDraftClearedLocally(user?.id);
+
+      if (shouldLoadProfile) {
         void fetchResumeProfile()
           .then((profile) => {
-            if (profile?.content && !resume) {
-              setResume(profile.content);
+            if (profile?.content) {
+              setResume((current) => current || profile.content);
             }
           })
           .catch(() => undefined);
@@ -223,14 +251,15 @@ export default function ResumeOptimizer() {
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
+      setDraftClearedLocally(user?.id, false);
       const draft: DraftData = { resume, jobDescription, mode, inputTab };
-      void saveOptimizeDraft(draft).catch(() => undefined);
+      void saveOptimizeDraft({ ...draft, cleared: false }).catch(() => undefined);
     }, 500);
 
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [resume, jobDescription, mode, inputTab]);
+  }, [resume, jobDescription, mode, inputTab, user?.id]);
 
   useEffect(() => {
     return () => {
@@ -244,6 +273,10 @@ export default function ResumeOptimizer() {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
+
+    draftReadyRef.current = false;
+    profileLoadedRef.current = true;
+    setDraftClearedLocally(user?.id, true);
 
     setResume("");
     setJobDescription("");
@@ -261,14 +294,35 @@ export default function ResumeOptimizer() {
         jobDescription: "",
         mode: "general",
         inputTab,
+        cleared: true,
       });
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "清空草稿同步失败，本机已清空但云端可能未更新",
+      );
+    } finally {
+      draftReadyRef.current = true;
     }
+  }
+
+  function handleLoadResume(content: string) {
+    setDraftClearedLocally(user?.id, false);
+    setDraftRestored(false);
+    setResume(content);
+    void saveOptimizeDraft({
+      resume: content,
+      jobDescription,
+      mode,
+      inputTab,
+      cleared: false,
+    }).catch(() => undefined);
   }
 
   // 恢复历史记录
   function handleRestoreHistory(record: HistoryRecord) {
+    setDraftClearedLocally(user?.id, false);
     setResume(record.resume);
     setJobDescription(record.jobDescription ?? "");
     setResult(record.result);
@@ -480,7 +534,7 @@ export default function ResumeOptimizer() {
         </p>
       </header>
 
-      <ResumeProfileBar currentContent={resume} onLoad={setResume} />
+      <ResumeProfileBar currentContent={resume} onLoad={handleLoadResume} />
 
       {draftRestored && (
         <p className="rounded-lg bg-blue-50 px-4 py-2 text-xs text-blue-700 dark:bg-blue-950 dark:text-blue-300">

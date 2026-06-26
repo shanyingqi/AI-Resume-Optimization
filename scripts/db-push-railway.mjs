@@ -103,7 +103,9 @@ try {
   await connection.end();
 }
 
-// 确保二期新增列存在（部分环境 ALTER 可能被跳过）
+// 补全可能缺失的列（先查再改，避免无意义 ALTER 卡锁）
+console.log("Running column fix...");
 await import("node:child_process").then(({ execSync }) => {
   execSync("node scripts/fix-phase2-columns.mjs", { stdio: "inherit", cwd: rootDir });
 });
+console.log("All done.");

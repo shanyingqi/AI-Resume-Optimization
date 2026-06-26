@@ -11,6 +11,7 @@ function toDraftResponse(draft: {
   jobDescription: string;
   mode: string;
   inputTab: string;
+  cleared: boolean;
   updatedAt: Date;
 }) {
   return {
@@ -18,6 +19,7 @@ function toDraftResponse(draft: {
     jobDescription: draft.jobDescription,
     mode: draft.mode as OptimizeMode,
     inputTab: draft.inputTab as InputTab,
+    cleared: draft.cleared,
     updatedAt: draft.updatedAt.toISOString(),
   };
 }
@@ -46,6 +48,7 @@ export async function PUT(request: Request) {
       jobDescription?: string;
       mode?: OptimizeMode;
       inputTab?: InputTab;
+      cleared?: boolean;
     };
 
     try {
@@ -58,6 +61,9 @@ export async function PUT(request: Request) {
     const jobDescription = body.jobDescription ?? "";
     const mode = body.mode === "targeted" ? "targeted" : "general";
     const inputTab = body.inputTab === "paste" ? "paste" : "upload";
+    const hasContent = Boolean(resume.trim() || jobDescription.trim());
+    const cleared =
+      typeof body.cleared === "boolean" ? body.cleared : !hasContent;
 
     if (resume.length > MAX_RESUME_CHARS) {
       return errorResponse(`简历不能超过 ${MAX_RESUME_CHARS.toLocaleString()} 字`);
@@ -74,8 +80,9 @@ export async function PUT(request: Request) {
         jobDescription,
         mode,
         inputTab,
+        cleared,
       },
-      update: { resume, jobDescription, mode, inputTab },
+      update: { resume, jobDescription, mode, inputTab, cleared },
     });
 
     return jsonResponse({ draft: toDraftResponse(draft) });
