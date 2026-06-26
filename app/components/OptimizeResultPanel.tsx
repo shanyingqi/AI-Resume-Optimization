@@ -93,8 +93,20 @@ export default function OptimizeResultPanel({
 }: OptimizeResultPanelProps) {
   const [copied, setCopied] = useState("");
   const [tab, setTab] = useState<ResultTab>("analysis");
+  const [editedOptimized, setEditedOptimized] = useState("");
 
   const showCoverLetter = isTargeted && jobDescription.trim().length > 0;
+
+  useEffect(() => {
+    if (result) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEditedOptimized(result.fullOptimizedResume);
+    }
+  }, [result]);
+
+  const manuallyEdited =
+    !!result && editedOptimized !== result.fullOptimizedResume;
+  const displayStructured = manuallyEdited ? undefined : result?.structuredResume;
 
   // 根据历史记录自动选择 tab
   useEffect(() => {
@@ -184,15 +196,16 @@ export default function OptimizeResultPanel({
       {tab === "compare" ? (
         <ComparePanel
           original={originalResume}
-          optimized={result.fullOptimizedResume}
-          structuredResume={result.structuredResume}
+          optimized={editedOptimized}
+          structuredResume={displayStructured}
           templateId={resumeTemplateId}
+          onOptimizedChange={setEditedOptimized}
           onApplyOptimized={onApplyOptimized}
         />
       ) : tab === "preview" ? (
         <ResumePreviewPanel
-          structuredResume={result.structuredResume}
-          fullOptimizedResume={result.fullOptimizedResume}
+          structuredResume={displayStructured}
+          fullOptimizedResume={editedOptimized}
           templateId={resumeTemplateId}
           onTemplateChange={onTemplateChange}
         />

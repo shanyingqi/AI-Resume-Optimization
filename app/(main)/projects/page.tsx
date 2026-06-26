@@ -92,11 +92,9 @@ export default function ProjectsPage() {
       JSON.stringify({
         resume: resume || undefined,
         jobDescription: detail.jobDescription || undefined,
-        mode: detail.jobDescription?.trim() ? "targeted" : "general",
-        projectId: project.id,
       }),
     );
-    router.push("/resume");
+    router.push(`/resume?projectId=${encodeURIComponent(project.id)}`);
   }
 
   async function startChat(project: JobApplicationSummary) {

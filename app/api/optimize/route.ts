@@ -9,7 +9,7 @@ import { buildOptimizePrompt } from "@/lib/prompts/optimize-resume";
 import {
   OPTIMIZE_RATE_LIMIT,
 } from "@/lib/resume/constants";
-import { validateOptimizeInput } from "@/lib/resume/validate";
+import { validateOptimizeInputAsync } from "@/lib/resume/validate";
 import type { OptimizeRequest } from "@/lib/types/resume";
 
 function sseEncode(event: OptimizeStreamEvent): Uint8Array {
@@ -32,8 +32,13 @@ export async function POST(request: Request) {
     });
   }
 
-  const { resume, jobDescription, mode } = body;
-  const validationError = validateOptimizeInput(resume, jobDescription, mode);
+  const { resume, jobDescription, mode, projectId } = body;
+  const validationError = await validateOptimizeInputAsync(
+    resume,
+    jobDescription,
+    mode,
+    projectId,
+  );
   if (validationError) {
     return new Response(JSON.stringify({ error: validationError }), {
       status: 400,

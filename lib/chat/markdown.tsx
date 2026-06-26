@@ -1,9 +1,104 @@
 import type { ReactNode } from "react";
 
+type Segment =
+  | { kind: "code"; content: string }
+  | { kind: "prose"; content: string };
+
+/** 统一空白与列表符号，避免全角 * 等无法识别 */
+function normalizeLine(line: string): string {
+  return line
+    .trim()
+    .replace(/^[\uFF0A\u2217\uFE63\u204E]/, "*")
+    .replace(/^\u2022/, "*")
+    .replace(/^\u00B7/, "*")
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ");
+}
+
+/** 解析无序列表行，返回列表项正文；非列表行返回 null */
+function parseBulletContent(line: string): string | null {
+  const trimmed = normalizeLine(line);
+  const match =
+    trimmed.match(/^[-*•·]\s+(.+)$/) ?? trimmed.match(/^\*\s*(\*\*.+)$/);
+  return match?.[1] ?? null;
+}
+
+/** 将全文拆成代码块与普通段落 */
+function splitSegments(text: string): Segment[] {
+  const lines = text.split("\n");
+  const segments: Segment[] = [];
+  let proseBuf: string[] = [];
+  let codeBuf: string[] = [];
+  let inFence = false;
+
+  // 刷新普通段落
+  const flushProse = () => {
+    if (!proseBuf.length) return;
+    segments.push({ kind: "prose", content: proseBuf.join("\n") });
+    proseBuf = [];
+  };
+
+  // 遍历每一行
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^```/.test(trimmed)) {
+      if (!inFence) {
+        flushProse();
+        inFence = true;
+        codeBuf = [];
+      } else {
+        segments.push({ kind: "code", content: codeBuf.join("\n") });
+        codeBuf = [];
+        inFence = false;
+      }
+      continue;
+    }
+
+    if (inFence) {
+      codeBuf.push(line);
+    } else {
+      proseBuf.push(line);
+    }
+  }
+
+  if (inFence) {
+    segments.push({ kind: "code", content: codeBuf.join("\n") });
+  } else {
+    flushProse();
+  }
+
+  return segments;
+}
+
+/** 代码块内容是否实为 Markdown 列表/段落（非程序代码） */
+function looksLikeProseBlock(content: string): boolean {
+  const lines = content
+    .split("\n")
+    .map(normalizeLine)
+    .filter(Boolean);
+  if (!lines.length) return false;
+
+  // 只要含列表行，就按 Markdown 渲染（避免「标题 + 列表」被当成代码块）
+  if (lines.some((l) => parseBulletContent(l) !== null || /^\d+\.\s+/.test(l))) {
+    return true;
+  }
+
+  if (lines.some((l) => /^#{1,6}\s/.test(l) || /^>\s/.test(l))) {
+    return true;
+  }
+
+  const codeLike = lines.filter((l) =>
+    /^(import |const |let |var |function |def |class |public |#include|{\s*$|}\s*$)/.test(
+      l,
+    ),
+  );
+  return codeLike.length === 0 && lines.length <= 12;
+}
+
 /** 行内 Markdown：**粗体**、*斜体*、`代码` */
 function renderInline(text: string): ReactNode[] {
   const parts: ReactNode[] = [];
-  const re = /(\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_|`[^`]+`)/g;
+  // ** 优先于 *，避免 * **粗体** 被误解析
+  const re = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*|_[^_]+_)/g;
   let last = 0;
   let key = 0;
   let match: RegExpExecArray | null;
@@ -45,20 +140,15 @@ function renderInline(text: string): ReactNode[] {
   return parts.length ? parts : [text];
 }
 
-/** 将助手回复的 Markdown 渲染为可读排版 */
-export function MarkdownContent({
-  text,
-  className = "",
-}: {
-  text: string;
-  className?: string;
-}) {
+/** 渲染普通 Markdown 段落（不含代码围栏） */
+function renderProse(text: string, keyOffset: number): ReactNode[] {
   const lines = text.split("\n");
   const nodes: ReactNode[] = [];
   let listItems: ReactNode[] = [];
   let listOrdered = false;
-  let key = 0;
+  let key = keyOffset;
 
+  // 刷新列表
   const flushList = () => {
     if (!listItems.length) return;
     const ListTag = listOrdered ? "ol" : "ul";
@@ -74,15 +164,27 @@ export function MarkdownContent({
     listOrdered = false;
   };
 
+  // 遍历每一行
   for (const line of lines) {
-    const trimmed = line.trim();
+    const trimmed = normalizeLine(line);
 
     if (!trimmed) {
       flushList();
       continue;
     }
 
-    const headingMatch = trimmed.match(/^(#{1,6})\s*(.+)$/);
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      flushList();
+      nodes.push(
+        <hr
+          key={key++}
+          className="my-3 border-zinc-200 dark:border-zinc-700"
+        />,
+      );
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       flushList();
       const level = Math.min(headingMatch[1].length + 1, 6);
@@ -95,7 +197,7 @@ export function MarkdownContent({
       continue;
     }
 
-    const blockquote = trimmed.match(/^>\s*(.+)$/);
+    const blockquote = trimmed.match(/^>\s+(.+)$/);
     if (blockquote) {
       flushList();
       nodes.push(
@@ -109,11 +211,13 @@ export function MarkdownContent({
       continue;
     }
 
-    const bullet = trimmed.match(/^[-*]\s+(.+)$/);
-    if (bullet) {
+    const bulletContent = parseBulletContent(trimmed);
+    if (bulletContent !== null) {
       if (listOrdered) flushList();
       listOrdered = false;
-      listItems.push(<li key={listItems.length}>{renderInline(bullet[1] ?? "")}</li>);
+      listItems.push(
+        <li key={listItems.length}>{renderInline(bulletContent)}</li>,
+      );
       continue;
     }
 
@@ -121,19 +225,59 @@ export function MarkdownContent({
     if (ordered) {
       if (!listOrdered && listItems.length) flushList();
       listOrdered = true;
-      listItems.push(<li key={listItems.length}>{renderInline(ordered[1] ?? "")}</li>);
+      listItems.push(
+        <li key={listItems.length}>{renderInline(ordered[1] ?? "")}</li>,
+      );
       continue;
     }
 
     flushList();
     nodes.push(
       <p key={key++} className="mb-1 last:mb-0">
-        {renderInline(line)}
+        {renderInline(trimmed)}
       </p>,
     );
   }
 
   flushList();
+  return nodes;
+}
+
+/** 将助手回复的 Markdown 渲染为可读排版 */
+export function MarkdownContent({
+  text,
+  className = "",
+}: {
+  text: string;
+  className?: string;
+}) {
+  const segments = splitSegments(text);
+  const nodes: ReactNode[] = [];
+  let key = 0;
+
+  for (const segment of segments) {
+    if (segment.kind === "code") {
+      const content = segment.content.trim();
+      if (!content) continue;
+      if (looksLikeProseBlock(content)) {
+        nodes.push(...renderProse(content, key));
+        key += content.split("\n").length + 10;
+      } else {
+        nodes.push(
+          <pre
+            key={key++}
+            className="my-2 overflow-x-auto rounded-lg bg-zinc-100 px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap dark:bg-zinc-800/80"
+          >
+            <code>{content}</code>
+          </pre>,
+        );
+      }
+      continue;
+    }
+
+    nodes.push(...renderProse(segment.content, key));
+    key += segment.content.split("\n").length + 10;
+  }
 
   return <div className={className}>{nodes}</div>;
 }

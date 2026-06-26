@@ -4,7 +4,7 @@ import {
   enforceRateLimit,
   trackUsage,
 } from "@/lib/api/request-limit";
-import { validateChatInput } from "@/lib/chat/validate";
+import { validateChatInputAsync } from "@/lib/chat/validate";
 import { buildChatSystemPrompt } from "@/lib/prompts/chat-resume";
 import { CHAT_RATE_LIMIT } from "@/lib/resume/constants";
 import type { ChatRequest } from "@/lib/types/chat";
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   }
 
   const { messages, context } = body;
-  const validationError = validateChatInput(messages, context);
+  const validationError = await validateChatInputAsync(messages, context);
   if (validationError) {
     return new Response(JSON.stringify({ error: validationError }), {
       status: 400,

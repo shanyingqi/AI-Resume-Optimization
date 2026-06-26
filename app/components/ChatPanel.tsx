@@ -460,10 +460,14 @@ export default function ChatPanel({ sessionId }: ChatPanelProps) {
       JSON.stringify({
         resume: session.context.resume,
         jobDescription: session.context.jobDescription,
-        mode: session.context.jobDescription ? "targeted" : "general",
       }),
     );
-    router.push("/resume");
+    const projectId = session.context.projectId;
+    router.push(
+      projectId
+        ? `/resume?projectId=${encodeURIComponent(projectId)}`
+        : "/resume",
+    );
   }
 
   const displayMessages = sortChatMessages(

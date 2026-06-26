@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { validateUsername } from "@/lib/content/moderation";
 import { ApiError, useAuth } from "@/app/components/AuthProvider";
 import { fetchUsage } from "@/lib/projects/applications";
 import type { UsageSummary } from "@/lib/types/project";
@@ -75,6 +75,14 @@ export default function AccountSettingsModal({
     setSaving(true);
     try {
       const nextName = name.trim();
+      if (nextName) {
+        const nameError = validateUsername(nextName);
+        if (nameError) {
+          setError(nameError);
+          setSaving(false);
+          return;
+        }
+      }
       await updateProfile({
         name: nextName ? nextName : null,
         avatarUrl,
