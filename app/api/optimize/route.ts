@@ -32,11 +32,12 @@ export async function POST(request: Request) {
     });
   }
 
-  const { resume, jobDescription, mode } = body;
+  const { resume, jobDescription, mode, projectId } = body;
   const validationError = await validateOptimizeInputAsync(
     resume,
     jobDescription,
     mode,
+    projectId,
   );
   if (validationError) {
     return new Response(JSON.stringify({ error: validationError }), {

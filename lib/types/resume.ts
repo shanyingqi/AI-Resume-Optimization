@@ -5,6 +5,7 @@ export interface OptimizeRequest {
   resume: string;
   jobDescription?: string;
   mode: OptimizeMode;
+  projectId?: string;
 }
 
 export interface ResumeIssue {

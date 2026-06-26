@@ -339,7 +339,12 @@ export default function ResumeOptimizer() {
 
     try {
       const data = await consumeOptimizeStream(
-        { resume, jobDescription, mode },
+        {
+          resume,
+          jobDescription,
+          mode,
+          projectId: selectedProjectId || undefined,
+        },
         setLoadingState,
         controller.signal,
       );
