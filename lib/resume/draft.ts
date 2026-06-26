@@ -8,6 +8,7 @@ export interface OptimizeDraftData {
   jobDescription: string;
   mode: OptimizeMode;
   inputTab: InputTab;
+  cleared?: boolean;
   updatedAt?: string;
 }
 
